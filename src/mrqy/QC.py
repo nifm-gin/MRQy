@@ -106,7 +106,7 @@ def volume_dicom(scans, name):
     # Reading metadata from the first DICOM file
     inf = pydicom.dcmread(scans[0])
     
-                
+    # Modifying attributes if they exist         
     if hasattr(inf, 'MagneticFieldStrength'):
         if inf.MagneticFieldStrength > 10:
             inf.MagneticFieldStrength = inf.MagneticFieldStrength/10000
@@ -169,7 +169,21 @@ def volume_dicom(scans, name):
 def volume_notdicom(scan, name):
     # Loading image data and header
     image_data, image_header = load(scan)
-    images = [image_data[:,:,i] for i in range(np.shape(image_data)[2])]
+    # Get image dimensions
+    image_shape = np.shape(image_data)
+    # Get smallest dimension index : (a:b:c) with a --> sagittal, b --> coronal, c --> axial
+    min_dim_index = image_shape.index(min(image_shape))
+    # Extract the 2D images from the 3D image data
+    if min_dim_index == 0:                                          # Sagittal
+        num_slices = image_shape[0]
+        images = [image_data[i,:,:] for i in range(num_slices)]
+    elif min_dim_index == 1:                                        # Coronal
+        num_slices = image_shape[1]
+        images = [image_data[:, i, :] for i in range(num_slices)]
+    elif min_dim_index == 2:                                        # Axial
+        num_slices = image_shape[2]
+        images = [image_data[:, :, i] for i in range(num_slices)] 
+    # images = [image_data[:,:,i] for i in range(np.shape(image_data)[2])]
     # Return image, name and image header
     return images, name, image_header      
 
@@ -192,10 +206,10 @@ def saveThumbnails_dicom(v, output):
     elif save_masks_flag=='False':
         ffolder = output
     # Create a directory for images
-    os.makedirs(output + os.sep + v[1]['ID'])
+    os.makedirs(output + os.sep + v[1]['ID'])       # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
     # Save images as thumbnails
     for i in range(0, len(v[0]), sample_size):
-        plt.imsave(output + os.sep + v[1]['ID'] + os.sep + v[1]['ID'] + '(%d).png' % i, v[0][i], cmap = cm.Greys_r)
+        plt.imsave(output + os.sep + v[1]['ID'] + os.sep + v[1]['ID'] + '(%d).png' % i, v[0][i], cmap = cm.Greys_r)                             # Le chemin + nom qu'ont les images.png dans leur dossier respectif
     # Print the number of saved images and the directory
     print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]['ID']))
     return ffolder + os.sep + v[1]['ID']
@@ -210,10 +224,10 @@ def saveThumbnails_mat(v, output):
     elif save_masks_flag=='False':
         ffolder = output
     # Create a directory for images 
-    os.makedirs(output + os.sep + v[1]['ID'])
+    os.makedirs(output + os.sep + v[1]['ID'])       # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
     # Save image as thumbnails
     for i in range(np.shape(v[0])[2]):
-        plt.imsave(output + os.sep + v[1]['ID']+ os.sep + v[1]['ID'] + '(%d).png' % int(i+1), v[0][:,:,i], cmap = cm.Greys_r)
+        plt.imsave(output + os.sep + v[1]['ID']+ os.sep + v[1]['ID'] + '(%d).png' % int(i+1), v[0][:,:,i], cmap = cm.Greys_r)                   # Le chemin + nom qu'ont les images.png dans leur dossier respectif
         # Print the number of saved images and the directory
     print('The number of %d images are saved to %s' % (np.shape(v[0])[2],output + os.sep + v[1]['ID']))
     return ffolder + os.sep + v[1]['ID']
@@ -221,10 +235,11 @@ def saveThumbnails_mat(v, output):
 
 def saveThumbnails_nondicom(v, output):
     # Create a directory for images
-    os.makedirs(output + os.sep + v[1])
+    os.makedirs(output + os.sep + v[1])             # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
     # Save images as thumbnails, with a rotation
     for i in range(len(v[0])):
-        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],270), cmap = cm.Greys_r)
+        # Save the images. Because of the precedent image processing operations, the image was rotated 90° in anti-clockwise. So we apply a 90° clockwise rotation
+        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],90), cmap = cm.Greys_r)        # Le chemin + nom qu'ont les images.png dans leur dossier respectif
         # print('image number %d out of %d is saved to %s' % (int(i+1), len(v[0]),output + os.sep + v[1]))
     print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]))
 

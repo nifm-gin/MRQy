@@ -3,7 +3,8 @@
  **********************************************/
 
 /***************** SYSTEM CONFIG **************/
-var DATA_PATH = "./Data/";
+var DATA_PATH = "/data_hdd/RADIO-AIDE/QualityControlMRQY/Data_Processed/";			/***** absolute path - for relative path, write ./Data/ 										*****/
+																					/***** here you should write the path where you want to send the results of the MRQy analysis 	*****/  
 var OPEN_WITH_TABLE = true,
     OPEN_WITH_TABLE_meas = true,
 	OPEN_WITH_CHART = true,

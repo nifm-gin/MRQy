@@ -17,7 +17,7 @@ from skimage import exposure as ex
 from skimage.filters import threshold_otsu
 from skimage.measure import find_contours
 from skimage.morphology import convex_hull_image
-
+import math
 import umap
 import scipy
 from scipy.io import loadmat
@@ -125,6 +125,20 @@ def volume_dicom(scans, name):
     elif folders_flag == "True":
         name_value = name
     
+    # Slice orientation
+    orientation = inf.ImageOrientationPatient
+    row_cosines = orientation[:3]
+    col_cosines = orientation[3:]
+    if abs(row_cosines[0]) > 0.9:
+        ori = 0         # Sagittal
+        return ori    
+    elif abs(row_cosines[1]) > 0.9:
+        ori = 1         # Coronal
+        return ori    
+    elif abs(row_cosines[2]) > 0.9:
+        ori = 2         # Axial
+        return ori             
+    
     # Creating a dictionnary of DICOM metadata attributes and their values    
     tags = {
              'ID': name_value,                                  # Patient / Subject ID
@@ -137,7 +151,8 @@ def volume_dicom(scans, name):
              'COLS': int(inf.Columns),                          # Columns value of the volume
              'TR': format(inf.RepetitionTime, '.2f'),           # Repetition time value of the volume
              'TE': format(inf.EchoTime, '.2f'),                 # Echo time value of the volume
-             'NUM': len(scans)                                  # Number of slice images in each volume
+             'NUM': len(scans),                                 # Number of slice images in each volume
+             'ORIENTATION': ori                                 # Slice orientation : Sagittal (0), Coronal (1) or Axial (2)
     }
     
     # Fetching additional attributes if available
@@ -175,17 +190,13 @@ def volume_notdicom(scan, name):
     min_dim_index = image_shape.index(min(image_shape))
     # Extract the 2D images from the 3D image data
     if min_dim_index == 0:                                          # Sagittal
-        num_slices = image_shape[0]
-        images = [image_data[i,:,:] for i in range(num_slices)]
+        images = [image_data[i, :, :] for i in range(np.shape(image_data)[0])]
     elif min_dim_index == 1:                                        # Coronal
-        num_slices = image_shape[1]
-        images = [image_data[:, i, :] for i in range(num_slices)]
+        images = [image_data[:, i, :] for i in range(np.shape(image_data)[1])]
     elif min_dim_index == 2:                                        # Axial
-        num_slices = image_shape[2]
-        images = [image_data[:, :, i] for i in range(num_slices)] 
-    # images = [image_data[:,:,i] for i in range(np.shape(image_data)[2])]
+        images = [image_data[:, :, i] for i in range(np.shape(image_data)[2])] 
     # Return image, name and image header
-    return images, name, image_header      
+    return images, name, image_header
 
 
 def volume_mat(mat_scan, name):
@@ -260,7 +271,7 @@ def worker_callback(s,fname_outdir):
         csv_report.write("#dataset:"+"\t".join(s["output"])+"\n")
     
     # Write data to the CSV report file                     
-    csv_report.write("\t".join([str(s[field]) for field in s["output"]])+"\n")
+    csv_report.write("\t".join([str(s[field]) for field in s["output"]])+"\n")          # replace replace_nan by str
     csv_report.flush()      # Flush the buffer to ensure writing immediately
     nfiledone += 1          # Increment the count of processed files
     print('The results are updated.')
@@ -532,7 +543,7 @@ if __name__ == '__main__':
                 plt.close()
     
     input_folder = fname_outdir                             # Where the .png are saved
-    output_folder = fname_outdir + '_contours'              # Where the _contours.png are saved
+    output_folder = fname_outdir                            # Where the _contours.png are saved
     image_contour(input_folder, output_folder)
     
     

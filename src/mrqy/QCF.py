@@ -1,11 +1,13 @@
 import os
 import numpy as np
+import mrqy.QC as QC        # import QC
 from scipy.signal import convolve2d as conv2
 from skimage.filters import threshold_otsu
 from skimage.morphology import convex_hull_image
 from skimage import exposure as ex
 from skimage.filters import median
 from skimage.morphology import square
+from medpy.io import load
 import warnings
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
@@ -16,7 +18,7 @@ warnings.filterwarnings("ignore")
 
 class BaseVolume_dicom(dict):
 
-    def __init__(self, fname_outdir, v, ol,folder_foregrounds, sample_size, ch_flag):
+    def __init__(self, fname_outdir, v, ol, folder_foregrounds, sample_size, ch_flag):
         # Initialize the dictionary
         dict.__init__(self)
 
@@ -45,21 +47,22 @@ class BaseVolume_dicom(dict):
         self.addToPrintList("TE", v[1]['TE'], v, ol, 9)
         self["os_handle"] = v[0]
         self.addToPrintList("NUM", v[1]['Number'], v, ol, 10)
-        self.addToPrintList("MEAN", vol(v, sample_size, "Mean",folder_foregrounds, ch_flag), v, ol, 11)
-        self.addToPrintList("RNG", vol(v, sample_size, "Range",folder_foregrounds, ch_flag), v, ol, 12)
-        self.addToPrintList("VAR", vol(v, sample_size, "Variance",folder_foregrounds, ch_flag), v, ol, 13)
-        self.addToPrintList("CV", vol(v, sample_size, "CV",folder_foregrounds, ch_flag), v, ol, 14)
-        self.addToPrintList("CPP", vol(v, sample_size, "CPP",folder_foregrounds, ch_flag), v, ol, 15)
-        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR",folder_foregrounds, ch_flag), v, ol, 16)
-        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1",folder_foregrounds, ch_flag), v, ol, 17)
-        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2",folder_foregrounds, ch_flag), v, ol, 18)
-        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3",folder_foregrounds, ch_flag), v, ol, 19)
-        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4",folder_foregrounds, ch_flag), v, ol, 20)
-        self.addToPrintList("CNR", vol(v, sample_size, "CNR",folder_foregrounds, ch_flag), v, ol, 21)
-        self.addToPrintList("CVP", vol(v, sample_size, "CVP",folder_foregrounds, ch_flag), v, ol, 22)
-        self.addToPrintList("CJV", vol(v, sample_size, "CJV",folder_foregrounds, ch_flag), v, ol, 23)
-        self.addToPrintList("EFC", vol(v, sample_size, "EFC",folder_foregrounds, ch_flag), v, ol, 24)
-        self.addToPrintList("FBER", vol(v, sample_size, "FBER",folder_foregrounds, ch_flag), v, ol, 25)
+        self.addToPrintList("ORIENTATION", v[1]['Orientation'], v, ol, 11)
+        self.addToPrintList("MEAN", vol(v, sample_size, "Mean", folder_foregrounds, ch_flag), v, ol, 12)
+        self.addToPrintList("RNG", vol(v, sample_size, "Range", folder_foregrounds, ch_flag), v, ol, 13)
+        self.addToPrintList("VAR", vol(v, sample_size, "Variance", folder_foregrounds, ch_flag), v, ol, 14)
+        self.addToPrintList("CV", vol(v, sample_size, "CV", folder_foregrounds, ch_flag), v, ol, 15)
+        self.addToPrintList("CPP", vol(v, sample_size, "CPP", folder_foregrounds, ch_flag), v, ol, 16)
+        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR", folder_foregrounds, ch_flag), v, ol, 17)
+        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1", folder_foregrounds, ch_flag), v, ol, 18)
+        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2", folder_foregrounds, ch_flag), v, ol, 19)
+        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3", folder_foregrounds, ch_flag), v, ol, 20)
+        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4", folder_foregrounds, ch_flag), v, ol, 21)
+        self.addToPrintList("CNR", vol(v, sample_size, "CNR", folder_foregrounds, ch_flag), v, ol, 22)
+        self.addToPrintList("CVP", vol(v, sample_size, "CVP", folder_foregrounds, ch_flag), v, ol, 23)
+        self.addToPrintList("CJV", vol(v, sample_size, "CJV", folder_foregrounds, ch_flag), v, ol, 24)
+        self.addToPrintList("EFC", vol(v, sample_size, "EFC", folder_foregrounds, ch_flag), v, ol, 25)
+        self.addToPrintList("FBER", vol(v, sample_size, "FBER", folder_foregrounds, ch_flag), v, ol, 26)
         
     def addToPrintList(self, name, val, v, ol, il):
         # Add a new key-value pair to the dictionary
@@ -91,21 +94,23 @@ class BaseVolume_nondicom(dict):
         self.addToPrintList("COLS", np.shape(v[0])[2], v, ol, 5)
         self["os_handle"] = v[0]
         self.addToPrintList("NUM", len(v[0]), v, ol, 6)
-        self.addToPrintList("MEAN", vol(v, sample_size, "Mean",fname_outdir, ch_flag), v, ol, 7)
-        self.addToPrintList("RNG", vol(v, sample_size, "Range",fname_outdir, ch_flag), v, ol, 8)
-        self.addToPrintList("VAR", vol(v, sample_size, "Variance",fname_outdir, ch_flag), v, ol, 9)
-        self.addToPrintList("CV", vol(v, sample_size, "CV",fname_outdir, ch_flag), v, ol, 10)
-        self.addToPrintList("CPP", vol(v, sample_size, "CPP",fname_outdir, ch_flag), v, ol, 11)
-        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR",fname_outdir, ch_flag), v, ol, 12)
-        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1",fname_outdir, ch_flag), v, ol, 13)
-        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2",fname_outdir, ch_flag), v, ol, 14)
-        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3",fname_outdir, ch_flag), v, ol, 15)
-        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4",fname_outdir, ch_flag), v, ol, 16)
-        self.addToPrintList("CNR", vol(v, sample_size, "CNR",fname_outdir, ch_flag), v, ol, 17)
-        self.addToPrintList("CVP", vol(v, sample_size, "CVP",fname_outdir, ch_flag), v, ol, 18)
-        self.addToPrintList("CJV", vol(v, sample_size, "CJV",fname_outdir, ch_flag), v, ol, 19)
-        self.addToPrintList("EFC", vol(v, sample_size, "EFC",fname_outdir, ch_flag), v, ol, 20)
-        self.addToPrintList("FBER", vol(v, sample_size, "FBER",fname_outdir, ch_flag), v, ol, 21)
+        # self.addToPrintList("ORIENTATION", orientation(scan), v, ol, 7)
+        self.addToPrintList("MEAN", vol(v, sample_size, "Mean", fname_outdir, ch_flag), v, ol, 8)
+        self.addToPrintList("RNG", vol(v, sample_size, "Range", fname_outdir, ch_flag), v, ol, 9)
+        self.addToPrintList("VAR", vol(v, sample_size, "Variance", fname_outdir, ch_flag), v, ol, 10)
+        self.addToPrintList("CV", vol(v, sample_size, "CV", fname_outdir, ch_flag), v, ol, 11)
+        self.addToPrintList("CPP", vol(v, sample_size, "CPP", fname_outdir, ch_flag), v, ol, 12)
+        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR", fname_outdir, ch_flag), v, ol, 13)
+        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1", fname_outdir, ch_flag), v, ol, 14)
+        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2", fname_outdir, ch_flag), v, ol, 15)
+        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3", fname_outdir, ch_flag), v, ol, 16)
+        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4", fname_outdir, ch_flag), v, ol, 17)
+        self.addToPrintList("CNR", vol(v, sample_size, "CNR", fname_outdir, ch_flag), v, ol, 18)
+        self.addToPrintList("CVP", vol(v, sample_size, "CVP", fname_outdir, ch_flag), v, ol, 19)
+        self.addToPrintList("CJV", vol(v, sample_size, "CJV", fname_outdir, ch_flag), v, ol, 20)
+        self.addToPrintList("EFC", vol(v, sample_size, "EFC", fname_outdir, ch_flag), v, ol, 21)
+        self.addToPrintList("FBER", vol(v, sample_size, "FBER", fname_outdir, ch_flag), v, ol, 22)
+        # self.addToPrintList("ORIENTATION", vol(v, sample_size, "ORIENTATION",fname_outdir, ch_flag), v, ol, 22)
         
     def addToPrintList(self, name, val, v, ol, il):
         # Add a new key-value pair to the dictionary
@@ -136,21 +141,21 @@ class BaseVolume_mat(dict):
         self.addToPrintList("COLS", np.shape(v[0])[1], v, ol, 2)
         self["os_handle"] = v[0]
         self.addToPrintList("NUM", np.shape(v[0])[2], v, ol, 3)
-        self.addToPrintList("MEAN", vol(v, sample_size, "Mean",folder_foregrounds), v, ol, 4)
-        self.addToPrintList("RNG", vol(v, sample_size, "Range",folder_foregrounds), v, ol, 5)
-        self.addToPrintList("VAR", vol(v, sample_size, "Variance",folder_foregrounds), v, ol, 6)
-        self.addToPrintList("CV", vol(v, sample_size, "CV",folder_foregrounds), v, ol, 7)
-        self.addToPrintList("CPP", vol(v, sample_size, "CPP",folder_foregrounds), v, ol, 8)
-        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR",folder_foregrounds), v, ol, 9)
-        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1",folder_foregrounds), v, ol, 10)
-        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2",folder_foregrounds), v, ol, 11)
-        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3",folder_foregrounds), v, ol, 12)
-        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4",folder_foregrounds), v, ol, 13)
-        self.addToPrintList("CNR", vol(v, sample_size, "CNR",folder_foregrounds), v, ol, 14)
-        self.addToPrintList("CVP", vol(v, sample_size, "CVP",folder_foregrounds), v, ol, 15)
-        self.addToPrintList("CJV", vol(v, sample_size, "CJV",folder_foregrounds), v, ol, 16)
-        self.addToPrintList("EFC", vol(v, sample_size, "EFC",folder_foregrounds), v, ol, 17)
-        self.addToPrintList("FBER", vol(v, sample_size, "FBER",folder_foregrounds), v, ol, 18)
+        self.addToPrintList("MEAN", vol(v, sample_size, "Mean", folder_foregrounds), v, ol, 4)
+        self.addToPrintList("RNG", vol(v, sample_size, "Range", folder_foregrounds), v, ol, 5)
+        self.addToPrintList("VAR", vol(v, sample_size, "Variance", folder_foregrounds), v, ol, 6)
+        self.addToPrintList("CV", vol(v, sample_size, "CV", folder_foregrounds), v, ol, 7)
+        self.addToPrintList("CPP", vol(v, sample_size, "CPP", folder_foregrounds), v, ol, 8)
+        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR", folder_foregrounds), v, ol, 9)
+        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1", folder_foregrounds), v, ol, 10)
+        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2", folder_foregrounds), v, ol, 11)
+        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3", folder_foregrounds), v, ol, 12)
+        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4", folder_foregrounds), v, ol, 13)
+        self.addToPrintList("CNR", vol(v, sample_size, "CNR", folder_foregrounds), v, ol, 14)
+        self.addToPrintList("CVP", vol(v, sample_size, "CVP", folder_foregrounds), v, ol, 15)
+        self.addToPrintList("CJV", vol(v, sample_size, "CJV", folder_foregrounds), v, ol, 16)
+        self.addToPrintList("EFC", vol(v, sample_size, "EFC", folder_foregrounds), v, ol, 17)
+        self.addToPrintList("FBER", vol(v, sample_size, "FBER", folder_foregrounds), v, ol, 18)
         
     def addToPrintList(self, name, val, v, ol, il):
         # Add a new key-value pair to the dictionary
@@ -206,7 +211,7 @@ def vol(v, sample_size, kk, outi_folder, ch_flag):
 def foreground(img,save_folder,v,inumber):
     try:
         # Perform adaptive histogram equalization on the image
-        h = ex.equalize_adapthist(img[:,:])*255
+        h = ex.equalize_hist(img[:,:])*255
         # Binary thresholding using Otsu's method on the original and histogram-equalized images
         oi = np.zeros_like(img, dtype=np.uint16)            # Otsu thresholding of the original image
         oi[(img > threshold_otsu(img)) == True] = 1
@@ -334,3 +339,10 @@ def fber(F, B, c, f, b):
     if bg_mu < 1.0e-3:
         return 0
     return float(fg_mu / bg_mu)
+
+# Slice orientation
+def orientation(scan):
+    image_data, image_header = load(scan)
+    image_shape = np.shape(image_data)
+    min_dim_index = image_shape.index(min(image_shape))
+    return min_dim_index

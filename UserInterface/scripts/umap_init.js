@@ -11,6 +11,7 @@ function initialize_umap_view (dataset = ORIGINAL_DATASET) {
     // init global SVG and MARGIN
     UMAP_MARGIN = {top: 10, right: 60, bottom: 100, left: 0};
 
+    // Initialize the SVG container for UMAP plot
     UMAP_SVG = d3.select("#umap-svg-container").append("svg")
         .attr("id", "umap-svg")
         .attr("width", $UMAP.width())
@@ -19,7 +20,7 @@ function initialize_umap_view (dataset = ORIGINAL_DATASET) {
         .attr("transform", "translate(" + UMAP_MARGIN.left + "," + UMAP_MARGIN.top + ")");
 
 
-
+    // Initialize UMAP with the dataset
     SS = init_umap(dataset);
 
 }

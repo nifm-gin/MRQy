@@ -210,12 +210,24 @@ def volume_notdicom(scan, name):
     # Get smallest dimension index : (a:b:c) with a --> sagittal, b --> coronal, c --> axial
     min_dim_index = image_shape.index(min(image_shape))
     # Extract the 2D images from the 3D image data
-    if min_dim_index == 0:                                          # Sagittal
-        images = [image_data[i, :, :] for i in range(np.shape(image_data)[0])]
-    elif min_dim_index == 1:                                        # Coronal
-        images = [image_data[:, i, :] for i in range(np.shape(image_data)[1])]
-    elif min_dim_index == 2:                                        # Axial
-        images = [image_data[:, :, i] for i in range(np.shape(image_data)[2])] 
+    '''
+    if min_dim_index == 0:
+        images = [image_data[i, :, :] for i in range(np.shape(image_data)[0])]      # Sagittal
+    elif min_dim_index == 1:
+        images = [image_data[:, i, :] for i in range(np.shape(image_data)[1])]      # Coronal
+    elif min_dim_index == 2:
+        images = [image_data[:, :, i] for i in range(np.shape(image_data)[2])]      # Axial
+    else:
+        images = [image_data[:, :, i] for i in range(np.shape(image_data)[2])]      # returns axial slices if it's a 3D volume
+    '''
+    if image_shape[0] < image_shape[1] and image_shape[0] < image_shape[2]:         # Sagittal
+        images = [image_data[i, :, :] for i in range(image_shape[0])]
+    elif image_shape[1] < image_shape[0] and image_shape[1] < image_shape[2]:       # Coronal
+        images = [image_data[:, i, :] for i in range(image_shape[1])]               
+    elif image_shape[2] < image_shape[0] and image_shape[2] < image_shape[1]:       # Axial
+        images = [image_data[:, :, i] for i in range(image_shape[2])]
+    else:                                                                           # 3D
+        images = [image_data[:, :, i] for i in range(image_shape[2])]
     # Return image, name and image header
     return images, name, image_header
 
@@ -275,7 +287,7 @@ def saveThumbnails_nondicom(v, output):
     # Save images as thumbnails, with a rotation
     for i in range(len(v[0])):
         # Save the images. Because of the precedent image processing operations, the image was rotated 90° in anti-clockwise. So we apply a 90° clockwise rotation
-        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],90), cmap = cm.Greys_r)        # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],90), cmap = cm.Greys_r)         # Le chemin + nom qu'ont les images.png dans leur dossier respectif
         # print('image number %d out of %d is saved to %s' % (int(i+1), len(v[0]),output + os.sep + v[1]))
     print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]))
 
@@ -376,7 +388,6 @@ class BaseVolume_nondicom(dict):
         self.addToPrintList("CJV", vol(v, sample_size, "CJV", fname_outdir, ch_flag), v, ol, 20)
         self.addToPrintList("EFC", vol(v, sample_size, "EFC", fname_outdir, ch_flag), v, ol, 21)
         self.addToPrintList("FBER", vol(v, sample_size, "FBER", fname_outdir, ch_flag), v, ol, 22)
-        # self.addToPrintList("ORIENTATION", vol(v, sample_size, "ORIENTATION", fname_outdir, ch_flag), v, ol, 22)
         
     def addToPrintList(self, name, val, v, ol, il):
         # Add a new key-value pair to the dictionary
@@ -461,7 +472,7 @@ def vol(v, sample_size, kk, outi_folder, ch_flag):
         I = v[0][i]
         # I = I - np.min(I)  # for CT 
         # Calculate foreground and background intensities
-        F, B, c, f, b = foreground(I,outi_folder,v,i)
+        F, B, c, f, b = foreground(I, outi_folder, v, i)
         # Check if the standard deviation of foreground is zero, skip computing measures
         if np.std(F) == 0:  # whole zero slice, no measure computing
             continue
@@ -477,7 +488,7 @@ def vol(v, sample_size, kk, outi_folder, ch_flag):
 
 
 
-def foreground(img,save_folder,v,inumber):
+def foreground(img, save_folder, v, inumber):
     try:
         # Perform adaptive histogram equalization on the image
         h = ex.equalize_hist(img[:,:])*255
@@ -630,8 +641,15 @@ def fber(F, B, c, f, b):
 def orientation(scan):
     image_data, image_header = load(scan)
     image_shape = np.shape(image_data)
-    min_dim_index = image_shape.index(min(image_shape))
-    return min_dim_index
+    if image_shape[0] < image_shape[1] and image_shape[0] < image_shape[2]:
+        orien = 0
+    elif image_shape[1] < image_shape[0] and image_shape[1] < image_shape[2]:
+        orien = 1
+    elif image_shape[2] < image_shape[0] and image_shape[2] < image_shape[1]:
+        orien = 2
+    else:
+        orien = 3
+    return orien
 
 
 
@@ -849,7 +867,7 @@ if __name__ == '__main__':
             for l,k in enumerate(nondicom_spli):
                 v = volume_notdicom(k, nondicom_names[l])
                 saveThumbnails_nondicom(v,fname_outdir)
-                s = BaseVolume_nondicom(fname_outdir, v,l+1, k, sample_size, ch_flag)
+                s = BaseVolume_nondicom(fname_outdir, v, l+1, k, sample_size, ch_flag)
                 worker_callback(s,fname_outdir)
             nondicom_flag = False
         
@@ -882,6 +900,7 @@ if __name__ == '__main__':
     # Draw the contours of the ROI after the analysis is done so that the contours don't interfere with the measures
     # This is useful if you want to verify that that the ROI includes the head/brain/bodypart so that the metrics are calculated correctly
     def image_contour(input_folder, output_folder):
+        print("Drawing the contours of the ROI... Almost done")
         # Verify the files in the directory
         for root, dirs, files in os.walk(input_folder):
             output_root = os.path.join(output_folder, os.path.relpath(root, input_folder))

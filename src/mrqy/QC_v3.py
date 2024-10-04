@@ -1,40 +1,59 @@
-##################### MRQy - Quality control and evaluation tool for MRI data #####################
-###################################################################################################
+#############################################################################################################################
+#############################################################################################################################
+####################                                                                                      ###################
+####################               MRQy - Quality control and evaluation tool for MRI data                ###################
+####################                                                                                      ###################
+#############################################################################################################################
+#############################################################################################################################
 
+'''
+MRQy (v3) is a quality control and evaluation tool for MRI data.
+This program first uses AI-assited brain extraction techniques to compute segmentation masks of the brain. You have the option
+of using either FSL-BET (fast and a bit accurate) or HD-BET (slower but much more accurate).
+Then, this mask is used to separate the foreground image (brain) from the background image (skull and others).
+Then, several quality control metrics are extracted from the image metadata and other are calculated thanks to the foreground
+and the background image.
+Finally, AI data dimensional reduction algorithms (UMAP and TSNE) are used to help find outliers in the data and to visualize
+the data in a lower dimension.
+All the metrics and info are saved in a .csv (.tsv) file. To visualize the data, open the index.html file in a navigator 
+(UserInterface/index.html). And then open the .tsv file. You will find tables, charts and graphs to  navigate through the 
+dataset.
+To function, the input folder must contain NIFTI images (.nii.gz). It doesn't function with DICOM images (.dcm) yet.
+'''
 
-###################################################################################################
-######################################## Import libraries #########################################
-###################################################################################################
+#############################################################################################################################
+##############################                        Import libraries                         ##############################
+#############################################################################################################################
 
-import os
-import numpy as np
-import argparse
-import datetime
-import time
-from medpy.io import load               # for .mha, .nii, or .nii.gz files
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-import pydicom                          # for .dcm files
-from itertools import accumulate
-import pandas as pd
-import scipy
-from scipy.cluster.vq import whiten
-from scipy.signal import convolve2d as conv2
-from sklearn.manifold import TSNE
-from skimage import exposure as ex
-from skimage.filters import threshold_otsu
-from skimage.filters import median
-from skimage.measure import find_contours
-from skimage.morphology import convex_hull_image
-from skimage.morphology import square
-import math
-import umap
-from scipy.io import loadmat
-import warnings        
-warnings.filterwarnings("ignore")       # remove all warnings like conversion thumbnails
+import argparse                                             # Handles command line arguments
+import datetime                                             # Manipulate time values
+from itertools import accumulate                            
+import matplotlib.cm as cm                                  # Interactive colormaps
+import matplotlib.pyplot as plt                             # Interactive plots
+from medpy.io import load                                   # For NIFTI image processing
+import nibabel as nib                                       # Read and write access to common neuroimaging file formats
+import numpy as np                                          # Mathematical operations over arrays
+import os                                                   # Interaction with the operating system
+import pandas as pd                                         # Data analysis
+import pydicom                                              
+from scipy.cluster.vq import whiten                         # Clustering algorithms
+from scipy.io import loadmat                                
+from scipy.ndimage import rotate                            # Rotation of arrays
+from scipy.signal import convolve2d as conv2                # Signal processing, convolution
+from skimage import exposure as ex                          
+from skimage.filters import median                          # Image local median
+from skimage.measure import find_contours                   
+from skimage.morphology import square                       # Square shaped footprint of an image
+from sklearn.manifold import TSNE                           # t-SNE clustering, dimensionality reduction
+import subprocess                                           # use command-line in python
+import time                                                 # Manipulate time values
+import umap                                                 # UMAP clustering, dimensionality reduction
+import warnings                                             # Warning subsystem
+warnings.filterwarnings("ignore")                           # Remove all warnings like conversion thumbnails
 
-###################################################################################################
-###################################################################################################
+#############################################################################################################################
+#############################################################################################################################
+#############################################################################################################################
 
 # Initialisation
 
@@ -43,48 +62,47 @@ csv_report = None
 first = True
 headers = []
 
+#############################################################################################################################
+##############################                           Definitions                           ##############################
+#############################################################################################################################
 
-###################################################################################################
-########################################### Definitions ###########################################
-###################################################################################################
+
+#################### File pre-processing ####################
+#############################################################
 
 
-def patient_name(root):
+def file_name(root):
     
     # Starting message
     print('MRQy is starting....')
     
-    # Gathering relevant file paths based on extensions. MRQy supports .dcm, .mha, .nii, .gz and .mat files
+    # Gathering relevant file paths based on extensions. MRQy supports .dcm, .nii.gz and .mat files
     files = [os.path.join(dirpath,filename) for dirpath, _, filenames in os.walk(root) 
                 for filename in filenames 
                 if filename.endswith('.dcm') 
-                or filename.endswith('.mha')
-                or filename.endswith('.nii')
-                or filename.endswith('.gz')
+                or filename.endswith('.nii.gz')
                 or filename.endswith('.mat')]
     
     # Separating files based on their extensions
     mats = [i for i in files if i.endswith('.mat')]
     dicoms = [i for i in files if i.endswith('.dcm')]
-    mhas = [i for i in files 
-            if i.endswith('.mha')
-            or i.endswith('.nii')
-            or i.endswith('.gz')]
+    niftis = [i for i in files if i.endswith('.nii.gz')]
+
     
     # Extracting subject identifiers from the different files
-    mhas_subjects = [os.path.basename(scan)[:os.path.basename(scan).index('.')] for scan in mhas]
+    niftis_subjects = [os.path.basename(scan)[:os.path.basename(scan).index('.')] for scan in niftis]
     dicom_subjects = []
     mat_subjects = [os.path.basename(scan)[:os.path.basename(scan).index('.')] for scan in mats]
     
+    # For DICOMS only
     if folders_flag == "False":
         # Processing individual DICOM files
-        for i in dicoms:
+        for i in dicoms: 
             dicom_subjects.append(pydicom.dcmread(i).PatientID) 
         # Counting occurences of each patient ID
         duplicateFrequencies = {}
         for i in dicom_subjects:
             duplicateFrequencies[i] = dicom_subjects.count(i)
-        
         # Extracting unique patient IDs and their counts
         subjects_id = []
         subjects_number = []
@@ -94,7 +112,6 @@ def patient_name(root):
         ind = [0] + list(accumulate(subjects_number))
         # Splitting DICOM files within folders
         splits = [dicoms[ind[i]:ind[i+1]] for i in range(len(ind)-1)]
-    
     elif folders_flag == "True":
         # Processing DICOM files within folders
         dicom_subjects = [d for d in os.listdir(root) if os.path.isdir(root + os.sep + d)]
@@ -111,21 +128,22 @@ def patient_name(root):
         splits = [dicoms[ind[i]:ind[i+1]] for i in range(len(ind)-1)]
 
     # Combining all subject identifiers
-    subjects = subjects_id + mhas_subjects + mat_subjects
+    subjects = subjects_id + niftis_subjects + mat_subjects
     # Displaying the total number of identified subjects
     print('The number of images is {}'.format(len(subjects)))
     # Returning various lists containing file paths, subjects, and DICOM splits
-    return files, subjects, splits, mhas, mhas_subjects, mats, mat_subjects
+    return files, subjects, splits, niftis, niftis_subjects, mats, mat_subjects
 
+
+#################### DICOM files processing ####################
+################################################################
 
 
 def volume_dicom(scans, name):
-    
     # Selecting a portion of scans based on size
     scans = scans[int(0.005 *len(scans)*(100 - middle_size)):int(0.005 *len(scans)*(100 + middle_size))]
     # Reading metadata from the first DICOM file
     inf = pydicom.dcmread(scans[0])
-    
     # Modifying attributes if they exist         
     if hasattr(inf, 'MagneticFieldStrength'):
         if inf.MagneticFieldStrength > 10:
@@ -138,13 +156,11 @@ def volume_dicom(scans, name):
             inf.RepetitionTime = 0
     if  hasattr(inf, 'EchoTime') == False:
             inf.EchoTime = 0
-    
     # Determining name value based on folders_flag
     if folders_flag == "False":
         name_value = inf.PatientID
     elif folders_flag == "True":
         name_value = name
-    
     # Slice orientation
     orientation = inf.ImageOrientationPatient
     row_cosines = orientation[:3]
@@ -158,7 +174,6 @@ def volume_dicom(scans, name):
     elif abs(row_cosines[2]) > 0.9:
         ori = 2         # Axial
         return ori             
-    
     # Creating a dictionnary of DICOM metadata attributes and their values    
     tags = {
              'ID': name_value,                                  # Patient / Subject ID
@@ -174,7 +189,6 @@ def volume_dicom(scans, name):
              'NUM': len(scans),                                 # Number of slice images in each volume
              'ORIENTATION': ori                                 # Slice orientation : Sagittal (0), Coronal (1) or Axial (2)
     }
-    
     # Fetching additional attributes if available
     tag_values = []
     # Checking for args variable 
@@ -188,7 +202,6 @@ def volume_dicom(scans, name):
             tag_values.append(value)
         res_dct = dict(zip(iter(tag_names), iter(tag_values)))
         tags.update(res_dct)
-    
     # Reading and sorting DICOM files, creating a 3D image volume    
     slices = [pydicom.read_file(s) for s in scans]
     slices.sort(key = lambda x: int(x.InstanceNumber))
@@ -196,51 +209,8 @@ def volume_dicom(scans, name):
     # images = PL['images'].to_numpy().astype(np.int64)
     images = np.stack([s.pixel_array for s in slices])
     images = images.astype(np.int64)
-    
     # Returning the image volume and associated tags
     return images, tags
-
-
-
-def volume_notdicom(scan, name):
-    # Loading image data and header
-    image_data, image_header = load(scan)
-    # Get image dimensions
-    image_shape = np.shape(image_data)
-    # Get smallest dimension index : (a:b:c) with a --> sagittal, b --> coronal, c --> axial
-    min_dim_index = image_shape.index(min(image_shape))
-    # Extract the 2D images from the 3D image data
-    '''
-    if min_dim_index == 0:
-        images = [image_data[i, :, :] for i in range(np.shape(image_data)[0])]      # Sagittal
-    elif min_dim_index == 1:
-        images = [image_data[:, i, :] for i in range(np.shape(image_data)[1])]      # Coronal
-    elif min_dim_index == 2:
-        images = [image_data[:, :, i] for i in range(np.shape(image_data)[2])]      # Axial
-    else:
-        images = [image_data[:, :, i] for i in range(np.shape(image_data)[2])]      # returns axial slices if it's a 3D volume
-    '''
-    if image_shape[0] < image_shape[1] and image_shape[0] < image_shape[2]:         # Sagittal
-        images = [image_data[i, :, :] for i in range(image_shape[0])]
-    elif image_shape[1] < image_shape[0] and image_shape[1] < image_shape[2]:       # Coronal
-        images = [image_data[:, i, :] for i in range(image_shape[1])]               
-    elif image_shape[2] < image_shape[0] and image_shape[2] < image_shape[1]:       # Axial
-        images = [image_data[:, :, i] for i in range(image_shape[2])]
-    else:                                                                           # 3D
-        images = [image_data[:, :, i] for i in range(image_shape[2])]
-    # Return image, name and image header
-    return images, name, image_header
-
-
-
-def volume_mat(mat_scan, name):
-    # Loading volume data 
-    v1 = loadmat(mat_scan)['vol']
-    # Creating a dictionnary for the ID
-    tags = {'ID': name}
-    # Return the loaded volume data and the tags
-    return v1, tags
-
 
 
 def saveThumbnails_dicom(v, output):
@@ -259,38 +229,6 @@ def saveThumbnails_dicom(v, output):
     # Print the number of saved images and the directory
     print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]['ID']))
     return ffolder + os.sep + v[1]['ID']
-
-
-
-def saveThumbnails_mat(v, output):
-    # Check if saving masks is enabled
-    if save_masks_flag!='False':
-        ffolder = output + '_foreground_masks'
-        # Create a directory for foreground masks
-        os.makedirs(ffolder + os.sep + v[1]['ID'])
-    elif save_masks_flag=='False':
-        ffolder = output
-    # Create a directory for images 
-    os.makedirs(output + os.sep + v[1]['ID'])       # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
-    # Save image as thumbnails
-    for i in range(np.shape(v[0])[2]):
-        plt.imsave(output + os.sep + v[1]['ID']+ os.sep + v[1]['ID'] + '(%d).png' % int(i+1), v[0][:,:,i], cmap = cm.Greys_r)                   # Le chemin + nom qu'ont les images.png dans leur dossier respectif
-        # Print the number of saved images and the directory
-    print('The number of %d images are saved to %s' % (np.shape(v[0])[2],output + os.sep + v[1]['ID']))
-    return ffolder + os.sep + v[1]['ID']
-
-
-
-def saveThumbnails_nondicom(v, output):
-    # Create a directory for images
-    os.makedirs(output + os.sep + v[1])             # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
-    # Save images as thumbnails, with a rotation
-    for i in range(len(v[0])):
-        # Save the images. Because of the precedent image processing operations, the image was rotated 90° in anti-clockwise. So we apply a 90° clockwise rotation
-        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],90), cmap = cm.Greys_r)         # Le chemin + nom qu'ont les images.png dans leur dossier respectif
-    # print('image number %d out of %d is saved to %s' % (int(i+1), len(v[0]),output + os.sep + v[1]))
-    print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]))
-
 
 
 class BaseVolume_dicom(dict):
@@ -350,6 +288,95 @@ class BaseVolume_dicom(dict):
             print('%s-%s. The %s of the patient with the name of <%s> is %s' % (ol,il,name, v[1]['ID'], val))
 
 
+#################### NIFTI files processing ####################
+################################################################
+
+
+def brain_extraction(scan, output_masks):
+    # Make the path for the output masks
+    output_mask = os.path.join(output_masks, os.path.basename(scan))
+    
+    # FSL-BET
+    # subprocess.run(['bet', scan, output_mask, '-f', '0.5', '-g', '0', '-m', '-n'], check=True)
+    
+    # HD-BET fast 
+    subprocess.run(['hd-bet', '-i', scan, '-o', output_mask, '-tta', '0', '-pp', '0', '-b', '0', '-mode', 'fast'], check=True)
+    
+    # HD-BET accurate
+    # subprocess.run(['hd-bet', '-i', scan, '-o', output_mask, '-tta', '1', '-pp', '1', '-b', '0', '-mode', 'accurate'], check=True)
+    
+    mask_path = output_mask.replace(".nii.gz", "_mask.nii.gz")
+
+    return mask_path
+
+
+def volume_nifti(scan, name):
+    # Loading image data and header
+    image_data, image_header = load(scan)
+    # Get image dimensions
+    image_shape = np.shape(image_data)
+    # Extract the 2D images from the 3D image data
+    if image_shape[0] < image_shape[1] and image_shape[0] < image_shape[2]:         # Sagittal
+        images = [image_data[i, :, :] for i in range(image_shape[0])]
+    elif image_shape[1] < image_shape[0] and image_shape[1] < image_shape[2]:       # Coronal
+        images = [image_data[:, i, :] for i in range(image_shape[1])]               
+    elif image_shape[2] < image_shape[0] and image_shape[2] < image_shape[1]:       # Axial
+        images = [image_data[:, :, i] for i in range(image_shape[2])]
+    else:                                                                           # 3D
+        images = [image_data[:, :, i] for i in range(image_shape[2])]
+    # Return image, name and image header
+    return images, name, image_header
+
+
+def volume_nifti_masks(mask_path):
+    
+    # Transform mask into 3D volume
+    mask_data, mask_header = load(mask_path)
+    mask_shape = np.shape(mask_data)
+    if mask_shape[0] < mask_shape[1] and mask_shape[0] < mask_shape[2]:         # Sagittal
+        masks = [mask_data[i, :, :] for i in range(mask_shape[0])]
+    elif mask_shape[1] < mask_shape[0] and mask_shape[1] < mask_shape[2]:       # Coronal
+        masks = [mask_data[:, i, :] for i in range(mask_shape[1])]               
+    elif mask_shape[2] < mask_shape[0] and mask_shape[2] < mask_shape[1]:       # Axial
+        masks = [mask_data[:, :, i] for i in range(mask_shape[2])]
+    else:                                                                           # 3D
+        masks = [mask_data[:, :, i] for i in range(mask_shape[2])]
+        
+    mask_name = os.path.basename(mask_path).split('.')[0]
+    
+    return masks, mask_name, mask_header
+
+
+def saveThumbnails_nondicom(v, output, masks):
+    # Create a directory for images
+    os.makedirs(output + os.sep + v[1])             # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    '''
+    # Save images as thumbnails, with a rotation
+    for i in range(len(v[0])):
+        # Save the images. Because of the precedent image processing operations, the image was rotated 90° in anti-clockwise. So we apply a 90° clockwise rotation
+        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],90), cmap = cm.Greys_r)         # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+    '''
+    # Save images as thumbnails, with the mask contours
+    for i in range(len(v[0])):
+        # Extract the image and the corresponding mask slice
+        img_slice = v[0][i]
+        mask_slice = masks[i]
+        # Find contours from the mask
+        img_slice = rotate(img_slice, 90)
+        mask_slice = rotate(mask_slice, 90)
+        contours = find_contours(mask_slice, level=0.5)
+        # Plot image and overlay contours
+        fig, ax = plt.subplots()
+        ax.imshow(img_slice, cmap='gray')
+        # Overlay the contours
+        for contour in contours:
+            ax.plot(contour[:, 1], contour[:, 0], color='red', linewidth=2)
+        ax.axis('off')  # Turn off the axis
+        plt.savefig(output + os.sep + v[1] + os.sep + v[1] + f'({i+1}).png', bbox_inches='tight', pad_inches=0)
+        plt.close(fig)  # Close the plot to save memory    
+    # print('image number %d out of %d is saved to %s' % (int(i+1), len(v[0]),output + os.sep + v[1]))
+    print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]))
+
 
 class BaseVolume_nondicom(dict):
 
@@ -373,21 +400,21 @@ class BaseVolume_nondicom(dict):
         self["os_handle"] = v[0]
         self.addToPrintList("NUM", len(v[0]), v, ol, 6)
         self.addToPrintList("ORIENTATION", orientation(scan), v, ol, 7) 
-        self.addToPrintList("MEAN", vol(v, sample_size, "Mean", fname_outdir, ch_flag), v, ol, 8)
-        self.addToPrintList("RNG", vol(v, sample_size, "Range", fname_outdir, ch_flag), v, ol, 9)
-        self.addToPrintList("VAR", vol(v, sample_size, "Variance", fname_outdir, ch_flag), v, ol, 10)
-        self.addToPrintList("CV", vol(v, sample_size, "CV", fname_outdir, ch_flag), v, ol, 11)
-        self.addToPrintList("CPP", vol(v, sample_size, "CPP", fname_outdir, ch_flag), v, ol, 12)
-        self.addToPrintList("PSNR", vol(v, sample_size, "PSNR", fname_outdir, ch_flag), v, ol, 13)
-        self.addToPrintList("SNR1", vol(v, sample_size, "SNR1", fname_outdir, ch_flag), v, ol, 14)
-        self.addToPrintList("SNR2", vol(v, sample_size, "SNR2", fname_outdir, ch_flag), v, ol, 15)
-        self.addToPrintList("SNR3", vol(v, sample_size, "SNR3", fname_outdir, ch_flag), v, ol, 16)
-        self.addToPrintList("SNR4", vol(v, sample_size, "SNR4", fname_outdir, ch_flag), v, ol, 17)
-        self.addToPrintList("CNR", vol(v, sample_size, "CNR", fname_outdir, ch_flag), v, ol, 18)
-        self.addToPrintList("CVP", vol(v, sample_size, "CVP", fname_outdir, ch_flag), v, ol, 19)
-        self.addToPrintList("CJV", vol(v, sample_size, "CJV", fname_outdir, ch_flag), v, ol, 20)
-        self.addToPrintList("EFC", vol(v, sample_size, "EFC", fname_outdir, ch_flag), v, ol, 21)
-        self.addToPrintList("FBER", vol(v, sample_size, "FBER", fname_outdir, ch_flag), v, ol, 22)
+        self.addToPrintList("MEAN", vol(v, volume_masks, sample_size, "Mean", fname_outdir, ch_flag), v, ol, 8)
+        self.addToPrintList("RNG", vol(v, volume_masks, sample_size, "Range", fname_outdir, ch_flag), v, ol, 9)
+        self.addToPrintList("VAR", vol(v, volume_masks, sample_size, "Variance", fname_outdir, ch_flag), v, ol, 10)
+        self.addToPrintList("CV", vol(v, volume_masks, sample_size, "CV", fname_outdir, ch_flag), v, ol, 11)
+        self.addToPrintList("CPP", vol(v, volume_masks, sample_size, "CPP", fname_outdir, ch_flag), v, ol, 12)
+        self.addToPrintList("PSNR", vol(v, volume_masks, sample_size, "PSNR", fname_outdir, ch_flag), v, ol, 13)
+        self.addToPrintList("SNR1", vol(v, volume_masks, sample_size, "SNR1", fname_outdir, ch_flag), v, ol, 14)
+        self.addToPrintList("SNR2", vol(v, volume_masks, sample_size, "SNR2", fname_outdir, ch_flag), v, ol, 15)
+        self.addToPrintList("SNR3", vol(v, volume_masks, sample_size, "SNR3", fname_outdir, ch_flag), v, ol, 16)
+        self.addToPrintList("SNR4", vol(v, volume_masks, sample_size, "SNR4", fname_outdir, ch_flag), v, ol, 17)
+        self.addToPrintList("CNR", vol(v, volume_masks, sample_size, "CNR", fname_outdir, ch_flag), v, ol, 18)
+        self.addToPrintList("CVP", vol(v, volume_masks, sample_size, "CVP", fname_outdir, ch_flag), v, ol, 19)
+        self.addToPrintList("CJV", vol(v, volume_masks, sample_size, "CJV", fname_outdir, ch_flag), v, ol, 20)
+        self.addToPrintList("EFC", vol(v, volume_masks, sample_size, "EFC", fname_outdir, ch_flag), v, ol, 21)
+        self.addToPrintList("FBER", vol(v, volume_masks, sample_size, "FBER", fname_outdir, ch_flag), v, ol, 22)
         
     def addToPrintList(self, name, val, v, ol, il):
         # Add a new key-value pair to the dictionary
@@ -397,6 +424,36 @@ class BaseVolume_nondicom(dict):
         if name != 'Name of Images' and il != 170:
             print('%s-%s. The %s of the patient with the name of <%s> is %s' % (ol,il,name, v[1], val))
 
+
+#################### MAT files processing ####################
+################################################################
+
+
+def volume_mat(mat_scan, name):
+    # Loading volume data 
+    v1 = loadmat(mat_scan)['vol']
+    # Creating a dictionnary for the ID
+    tags = {'ID': name}
+    # Return the loaded volume data and the tags
+    return v1, tags
+
+
+def saveThumbnails_mat(v, output):
+    # Check if saving masks is enabled
+    if save_masks_flag!='False':
+        ffolder = output + '_foreground_masks'
+        # Create a directory for foreground masks
+        os.makedirs(ffolder + os.sep + v[1]['ID'])
+    elif save_masks_flag=='False':
+        ffolder = output
+    # Create a directory for images 
+    os.makedirs(output + os.sep + v[1]['ID'])       # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    # Save image as thumbnails
+    for i in range(np.shape(v[0])[2]):
+        plt.imsave(output + os.sep + v[1]['ID']+ os.sep + v[1]['ID'] + '(%d).png' % int(i+1), v[0][:,:,i], cmap = cm.Greys_r)                   # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+        # Print the number of saved images and the directory
+    print('The number of %d images are saved to %s' % (np.shape(v[0])[2],output + os.sep + v[1]['ID']))
+    return ffolder + os.sep + v[1]['ID']
 
 
 class BaseVolume_mat(dict):
@@ -444,8 +501,11 @@ class BaseVolume_mat(dict):
             print('%s-%s. The %s of the patient with the name of <%s> is %s' % (ol,il,name, v[1]['ID'], val))
 
 
+#################### Image processing #######################
+#############################################################
 
-def vol(v, sample_size, kk, outi_folder, ch_flag):
+
+def vol(v, volume_masks, sample_size, kk, outi_folder, ch_flag):
     # Dictionary mapping each metric's name to its corresponding function
     switcher={
             'Mean': mean,
@@ -468,11 +528,27 @@ def vol(v, sample_size, kk, outi_folder, ch_flag):
     func=switcher.get(kk)
     M = []
     # Iterate through the volume data
-    for i in range(1, len(v[0]), sample_size):
+    for i, mask_number in zip(range(1, len(v[0]), sample_size), range(1, len(volume_masks[0]), sample_size)):
         I = v[0][i]
+        msk = volume_masks[0][mask_number]
         # I = I - np.min(I)  # for CT 
         # Calculate foreground and background intensities
-        F, B, c, f, b = foreground(I, outi_folder, v, i)
+        F, B, c, f, b = foreground(I, msk, outi_folder, v, i)
+        '''
+        # Debug
+        # Plot img, msk, fore_image, and back_image
+        fig, axs = plt.subplots(1, 4, figsize=(16, 4))
+        axs[0].imshow(I, cmap='gray')
+        axs[0].set_title('Image (img)')
+        axs[1].imshow(msk, cmap='gray')
+        axs[1].set_title('Mask (msk)')
+        axs[2].imshow(F, cmap='gray')
+        axs[2].set_title('Foreground (fore_image)')
+        axs[3].imshow(B, cmap='gray')
+        axs[3].set_title('Background (back_image)')
+        plt.show()
+        '''
+        
         # Check if the standard deviation of foreground is zero, skip computing measures
         if np.std(F) == 0:  # whole zero slice, no measure computing
             continue
@@ -488,42 +564,21 @@ def vol(v, sample_size, kk, outi_folder, ch_flag):
 
 
 
-def foreground(img, save_folder, v, inumber):
-    try:
-        # Perform adaptive histogram equalization on the image
-        h = ex.equalize_hist(img[:,:])*255
-        # Binary thresholding using Otsu's method on the original and histogram-equalized images
-        oi = np.zeros_like(img, dtype=np.uint16)            # Otsu thresholding of the original image
-        oi[(img > threshold_otsu(img)) == True] = 1
-        oh = np.zeros_like(img, dtype=np.uint16)            # Otsu thresholding of the equalized image
-        oh[(h > threshold_otsu(h)) == True] = 1
-        # Compute weights for the images based on the thresholding results
-        nm = img.shape[0] * img.shape[1]
-        w1 = np.sum(oi)/(nm)                # w1 = weight of Otsu on original image
-        w2 = np.sum(oh)/(nm)                # w2 = weight of Otsu on equalized image
-        # Compute a new image using the calculated weights
-        ots = np.zeros_like(img, dtype=np.uint16)
-        new = (w1 * img) + (w2 * h)
-        ots[(new > threshold_otsu(new)) == True] = 1 
-        # Obtain convex hull of the thresholded image
-        conv_hull = convex_hull_image(ots)
-        # Calculate the foreground and background images based on the convex hull
-        ch = np.multiply(conv_hull, 1)
-        fore_image = ch * img
-        back_image = (1 - ch) * img
-    except Exception:
-        # If an exception occurs, return default values
-        fore_image = img.copy()
-        back_image = np.zeros_like(img, dtype=np.uint16)
-        conv_hull = np.zeros_like(img, dtype=np.uint16)
-        ch = np.multiply(conv_hull, 1)
-        
+def foreground(img, msk, save_folder, v, inumber):
+    
+    # Get the image and the mask to compute the foreground and the background
+    fore_image = msk*img
+    back_image = (1 - msk) * img
+         
     # if not os.path.isdir(save_folder + os.sep + v[1]['ID']):                              
-    return fore_image, back_image, conv_hull, img[conv_hull], img[conv_hull==False]         # fore_image = F    back_image = B      conv_hull = c       img[conv_hull] = f      img[conv_hull==False] = b
+    return fore_image, back_image, msk, img[msk == 1], img[msk == 0]         # fore_image = F    back_image = B      conv_hull = c       img[conv_hull] = f      img[conv_hull==False] = b
 
 
+#################### Image quality control metrics ####################
+#######################################################################
 
 # All the computed measurements are average values over the entire volume, which are calculated for every single slice separately.
+
 
 # Mean of the foreground intensity values
 def mean(F, B, c, f, b):
@@ -559,7 +614,6 @@ def cpp(F, B, c, f, b):
 def psnr(img1, img2):
     mse = np.square(np.subtract(img1, img2)).mean()
     return 20 * np.log10(np.nanmax(img1) / np.sqrt(mse))
-
 def fpsnr(F, B, c, f, b):
     I_hat = median(F/np.max(F), square(5))
     return psnr(F, I_hat)
@@ -652,6 +706,9 @@ def orientation(scan):
     return orien
 
 
+#################### CSV file editing ####################
+##########################################################
+
 
 def worker_callback(s,fname_outdir):
     # Access global variables
@@ -675,12 +732,14 @@ def worker_callback(s,fname_outdir):
     print('The results are updated.')
 
 
+#################### Data dimensionality reduction and classification ####################
+##########################################################################################
+
 
 def tsv_to_dataframe(tsvfileaddress):       # Creates a dataframe with all the data extracted from metadata and calculated from images
     # This creates the dataframe used for the tables, graphs, charts, UMAP and TSNE.
     # If you change things here (columns or rows used), it will modify what is shown in the user interface
     return pd.read_csv(tsvfileaddress, sep='\t', skiprows=2, header=0)          # Read the CSV file into a pandas dataframe, skipping the first two rows and using the third row as headers
-
 
 
 def data_whitening(dframe):
@@ -696,7 +755,6 @@ def data_whitening(dframe):
     ds = whiten(df)  
     # Returns the transformed dataset : these are the data used by UMAP and TSNE
     return ds
-
 
 
 def tsne_umap(dataframe, per):
@@ -718,7 +776,6 @@ def tsne_umap(dataframe, per):
     dataframe['v'] = reducer_obj[:,1]
 
 
-
 def cleanup(final_address, per):
     # Read data from the final TSV file into a dataframe
     df = tsv_to_dataframe(final_address)
@@ -733,6 +790,10 @@ def cleanup(final_address, per):
     # Return the modified dataframe
     return df
 
+
+#############################################################################################################################
+##########################                Print message box at the end of the code                 ##########################
+#############################################################################################################################
 
 
 def print_msg_box(msg, indent=1, width=None, title=None):
@@ -757,10 +818,9 @@ def print_msg_box(msg, indent=1, width=None, title=None):
     print(box)
 
 
-
-###################################################################################################
-########################## Main function calling all the other functions ##########################
-###################################################################################################
+#############################################################################################################################
+##########################              Main function calling all the other functions              ##########################
+#############################################################################################################################
 
 
 if __name__ == '__main__':
@@ -785,7 +845,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', help="if yes the ch computes objects", default=False)
     
     args = parser.parse_args() 
-    root = args.inputdir[0]
+    root = args.inputdir[0]     # root = input_directory
     
     # Setting flags based on parsed arguments
     if args.r == 0:
@@ -819,7 +879,7 @@ if __name__ == '__main__':
     
     overwrite_flag = "w"        
     headers.append(f"outdir:\t{os.path.realpath(fname_outdir)}") 
-    patients, names, dicom_spil, nondicom_spli, nondicom_names, mat_spli, mat_names = patient_name(root)
+    patients, names, dicom_spil, nondicom_spli, nondicom_names, mat_spli, mat_names = file_name(root)
 
     # Determine data types and set corresponding flags
     if len(dicom_spil) > 0 and len(nondicom_spli) > 0 and len(mat_spli) > 0:
@@ -853,6 +913,10 @@ if __name__ == '__main__':
     if len(dicom_spil) == 0 and len(nondicom_spli) == 0 and len(mat_spli) == 0:
         print('The input folder is empty or includes unsupported files format!')
     
+    output_masks = os.path.join(fname_outdir, 'masks')
+    os.makedirs(output_masks, exist_ok=True)
+
+    
     # Process each data type (DICOM, non-DICOM, MAT) if available
     for i in range(len(names)):
         if dicom_flag:
@@ -865,8 +929,10 @@ if __name__ == '__main__':
             
         if nondicom_flag:
             for l,k in enumerate(nondicom_spli):
-                v = volume_notdicom(k, nondicom_names[l])
-                saveThumbnails_nondicom(v,fname_outdir)
+                mask = brain_extraction(k, output_masks)
+                v = volume_nifti(k, nondicom_names[l])
+                volume_masks = volume_nifti_masks(mask)
+                saveThumbnails_nondicom(v,fname_outdir, volume_masks[0])
                 s = BaseVolume_nondicom(fname_outdir, v, l+1, k, sample_size, ch_flag)
                 worker_callback(s,fname_outdir)
             nondicom_flag = False
@@ -897,66 +963,6 @@ if __name__ == '__main__':
     df.to_csv(fname_outdir + os.sep + 'IQM.csv', index=False)
     print("The IQMs data are saved in the {} file. ".format(fname_outdir + os.sep + "IQM.csv"))
     
-    # Draw the contours of the ROI after the analysis is done so that the contours don't interfere with the measures
-    # This is useful if you want to verify that that the ROI includes the head/brain/bodypart so that the metrics are calculated correctly
-    def image_contour(input_folder, output_folder):
-        print("Drawing the contours of the ROI... Almost done")
-        # Verify the files in the directory
-        for root, dirs, files in os.walk(input_folder):
-            output_root = os.path.join(output_folder, os.path.relpath(root, input_folder))
-            os.makedirs(output_root, exist_ok=True)
-            for file in files:
-                if file.endswith('csv') or file.endswith('.tsv'):
-                    continue
-                input_path = os.path.join(root, file)
-                output_path = os.path.join(output_root, file)
-                img = plt.imread(input_path)
-                # Get input image shape
-                input_height, input_width = img.shape[:2]
-                # Convert to grayscale
-                if img.shape[2] == 4:
-                    img = img[:,:,:3]   # exclude the alpha channel
-                img = img.mean(axis=2)
-                # Perform adaptive equalization of the image 
-                ae = ex.equalize_adapthist(img)
-                # oi = Otsu thresholding of the original image
-                oi = np.zeros_like(img, dtype=np.uint16)            
-                oi[(img > threshold_otsu(img)) == True] = 1
-                # oa = Otsu thresholding of the adaptive equalized image
-                oa = np.zeros_like(img, dtype=np.uint16)            
-                oa[(ae > threshold_otsu(ae)) == True] = 1
-                # Compute weights for the images nased on the thresholding results
-                nm = img.shape[0] * img.shape[1]
-                w1 = np.sum(oi)/(nm)        # w1 = weight of Otsu on original image (img)
-                w2 = np.sum(oa)/(nm)        # w2 = weight of Otsu on adaptive equalized (ae)
-                # New image using the weights of the Otsu thresholding and adaptive equalization
-                ots = np.zeros_like(img, dtype=np.uint16)                     
-                new = (w1 * img) + (w2 * ae)
-                ots[(new > threshold_otsu(new)) == True] = 1
-                # Convex hull of the new image using the weights of the Otsu thresholding and adaptive equalization (ots_2)
-                conv_hull = convex_hull_image(ots)
-                # Compute foreground image
-                ch = np.multiply(conv_hull, 1)
-                fore_image = ch * img
-                # Make sure the output image has the same shape as input image
-                fore_image = fore_image[:input_height, :input_width]
-                # Defintion to draw the contours
-                def contours(conv_hull):
-                    # Find contours of the foreground image (= the convex_hull)
-                    contours = find_contours(conv_hull)
-                    for contour in contours:
-                        plt.plot(contour[:, 1], contour[:, 0], linewidth=3, color='green')
-                        plt.axis('off')
-                # contours(fore_image, conv_hull)
-                plt.imshow(fore_image, cmap='gray') ; contours(conv_hull)
-                plt.savefig(output_path, bbox_inches='tight', pad_inches=0)
-                plt.close()
-    
-    input_folder = fname_outdir                             # Where the .png are saved
-    output_folder = fname_outdir                            # Where the _contours.png are saved
-    image_contour(input_folder, output_folder)
-    
-    
     # Print execution information
     print("Done!")
     print("MRQy program took", format((time.time() - start_time)/60, '.2f'), \
@@ -966,3 +972,8 @@ if __name__ == '__main__':
     msg = "Please go to the '{}' directory and open up the 'index.html' file.\n".format(print_folder_note) + \
     "Click on 'View Results' and select '{}' file.\n".format(fname_outdir + os.sep + "results.tsv")   
     print_msg_box(msg, indent=3, width=None, title="To view the final MRQy interface results:")
+
+
+#############################################################################################################################
+#############################################################################################################################
+#############################################################################################################################

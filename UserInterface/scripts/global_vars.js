@@ -5,22 +5,14 @@
 
 /******************** DATASET *****************/
 var ORIGINAL_DATASET = [],
-	ORIGINAL_DATASET2 = [],
-	ORIGINAL_DATASET3 = [],
-	ORIGINAL_DATASET1 = [],
+	columnInfo = {},
 	CURRENT_MULTI_SELECTED = [],
 	ORIGINAL_CASE_LIST = [],
-	ORIGINAL_CASE_LIST2 = [],
-	ORIGINAL_CASE_LIST1 = [],
-	CURRENT_CASE_LIST = [],
 	ORIGINAL_CASE_DICT = {},
 	ORIGINAL_FEATURE_LIST = [];
-	ORIGINAL_FEATURE_LIST2 = [];
-	ORIGINAL_FEATURE_LIST1 = [];
-	ORIGINAL_FEATURE_LIST3 = [];
 	image_names = [];
 	test_value = 0;
-	patient_names = [];
+	participant_names = [];
 var CURRENT_SELECTED = "";
 // decide which attributes to keep in ORIGINAL_CASE_DICT
 var FEATURES_TO_MAP = ["outdir"];
@@ -92,63 +84,6 @@ var DATA_TABLE_CONFIG = {
 var CURRENT_HIDDEN_COLUMNS = DEFAULT_HIDDEN_COLUMNS;
 
 
-
-/****************** TABLE_meas VIEW ****************/
-
-var TABLEM;
-var DATA_TABLE_CONFIG_meas = {
-	paging: true,
-	scrollY: "165px",
-	scrollX: true,
-	scroller: true,
-	// scrollCollapse: true,
-	// colReorder: true,
-	// select: true,
-	dom: '<"table-content col-11"t><"table-control col-1"B>', //Blfrip
-	keys: true,
-	buttons: [
-		{
-			extend: 'copy',
-			text: 'Copy',
-			exportOptions: {
-				columns: ':visible'
-			}
-		},
-		{
-			extend: 'csv',
-			text: 'Save',
-			fieldSeparator: "\t",
-			fieldBoundary: "",
-			filename: "result_revised_measurments",
-			extension: ".tsv",
-			customize: function (csv) {
-				console.log(csv);
-				return FILE_HEADER + csv;
-			}
-		},
-		{
-			text: 'Delete',
-			action: function(e, dt, node, config) {
-				var indices = TABLEM.rows('.selected').indexes();
-				TABLEM.rows('.selected').remove().draw(false);
-
-				for (var i = 0; i < indices.length; i ++) {
-					ORIGINAL_DATASET.splice(indices[i], 1);
-				}
-				exit_select_mode();
-				update_views();
-			}
-		},
-		{
-			text: 'Deselect',
-			action: function(e, dt, node, config) {
-				exit_select_mode();
-			}
-		}
-	]
-};
-// var CURRENT_HIDDEN_COLUMNS = DEFAULT_HIDDEN_COLUMNS;
-
 /****************** CHART VIEW ****************/
 var CURRENT_CHART_ATTRIBUTE = DEFAULT_CHART_ATTRIBUTE;
 var CURRENT_PARAC_ATTRIBUTES;
@@ -161,23 +96,13 @@ var CHART_SVG,
 	PARAC_MARGIN,
 	TIP;
 
+
 /****************** IMAGE VIEW ****************/
 var SKIP_IMAGE_EXTENSIONS = [];
 var CHECK_IMAGE_EXTENSIONS = DEFAULT_IMAGE_EXTENSIONS.map(function () {return false;});
 var CURRENT_IMAGE_TYPE = 0,
 	CURRENT_COMPARE_TYPE = -1;
 var DETAIL_MODE_FLAG = false;
-
-
-
-
-
-/****************** TSNE VIEW ****************/
-var $TSNE= $("#tsne-svg-container");
-// var CURRENT_VIS_TYPE = DEFAULT_VIS_TYPE;
-var TSNE_SVG,
-	TSNE_MARGIN;
-	// TIP;
 
 
 /****************** UMAP VIEW ****************/

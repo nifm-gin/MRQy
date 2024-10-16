@@ -15,24 +15,13 @@ function initialize_data_table (dataset) {
 	// init_editability();
 	init_button_style();
 
-
-
-
-	CURRENT_SORT_ATTRIBUTE = ORIGINAL_FEATURE_LIST1[TABLE.order()[0][0]];
+	CURRENT_SORT_ATTRIBUTE = ORIGINAL_FEATURE_LIST[TABLE.order()[0][0]];
 
 	$table.find("tbody").on("click", 'td', function () {
 
 		if ($(TABLE.column($(this).index() + ":visIdx").header()).text().trim() != "comments") {
 			var case_name = $(this).parent().find("td:first-child").text();
-			// console.log(case_name)
 			enter_select_mode(case_name, true);
-			// $(this).css("border","2px solid red");
-
-			// if (case_name != CURRENT_SELECTED) {
-			// 	enter_select_mode(case_name, true);
-			// } else {
-			// 	exit_select_mode();
-			// }
 		} else {
 			$("tr.selected").removeClass("selected");
 		}
@@ -46,28 +35,66 @@ function initialize_data_table (dataset) {
 }
 
 
-function generate_table (dataset, table) {
-	
-	var thead_content = "<tr>";
+function generate_table(dataset, table) {
+    // Step 1: Create the table header
+    var thead_content = "<tr>";
+    ORIGINAL_FEATURE_LIST.forEach(function(d, i) {
+        // Add the original column header
+        thead_content += "<th>" + d + "</th>";
+        // Add the cloned column header (MRI Modality after QC) after the first column
+        if (i === 0) {
+            thead_content += "<th>MRI Modality after QC</th>";
+        }
+    });
+    thead_content += "</tr>";
 
+    // Step 2: Create the table body
+    var tbody_content = "";
+    for (var i = 0; i < dataset.length; i++) {
+        tbody_content += "<tr>";
+        for (var j = 0; j < ORIGINAL_FEATURE_LIST.length; j++) {
+            var cellContent = dataset[i][ORIGINAL_FEATURE_LIST[j]];
+            if (typeof cellContent === 'number') {
+                if (Math.abs(cellContent) >= 1e5) {
+                    cellContent = cellContent.toExponential(2);
+                } else {
+                    cellContent = cellContent.toFixed(2);
+                }
+            } else if (cellContent === undefined || cellContent === null || cellContent === '') {
+                cellContent = 'N/A';
+            }
 
-	ORIGINAL_FEATURE_LIST1.forEach(function (d, i) {
-		thead_content += ("<th>" + d + "</th>");
-	});
-	thead_content += "</tr>";
+            // Original column data
+            tbody_content += "<td>" + cellContent + "</td>";
 
-	tbody_content = "";
-	for (var i = 0; i < dataset.length; i++) {
-		tbody_content += "<tr>";
-		for (var j = 0; j < ORIGINAL_FEATURE_LIST1.length; j++) {
-			tbody_content += ("<td>" + dataset[i][ORIGINAL_FEATURE_LIST1[j]] + "</td>");
-		}
-		tbody_content += "</tr>";
-		// console.log(tbody_content)
-	}
+            // Add the cloned column with editable content, after the first column
+            if (j === 0) {
+                tbody_content += "<td contenteditable='true' class='editable'>" + cellContent + "</td>";
+            }
+        }
+        tbody_content += "</tr>";
+    }
 
-	table.children("thead").empty().html(thead_content);
-	table.children("tbody").empty().html(tbody_content);
+    // Step 3: Populate the table
+    table.children("thead").empty().html(thead_content);
+    table.children("tbody").empty().html(tbody_content);
+
+    // Step 4: Add event listener to save changes when editing the cloned column
+    table.on('blur', 'td.editable', function () {
+        var newValue = $(this).text();
+        var rowIndex = $(this).closest('tr').index();  // Get the row index
+        var columnIndex = $(this).index();  // Get the column index (second column, index = 1)
+
+        // Save the change to the dataset
+        dataset[rowIndex][ORIGINAL_FEATURE_LIST[0]] = newValue;  // Save the edited value
+        console.log("Row " + rowIndex + ", Column " + columnIndex + " updated to: " + newValue);
+    });
+
+    // Initialize the table with DataTables features (pagination, sorting, etc.)
+    if ($.fn.DataTable.isDataTable(table)) {
+        table.DataTable().clear().destroy(); // Destroy existing table if it's already initialized
+    }
+    TABLE = table.DataTable(DATA_TABLE_CONFIG);
 }
 
 
@@ -111,7 +138,7 @@ function generate_config (dataset) {
 	DATA_TABLE_CONFIG["columns"] = [];
 	var colvis_buttons_config = []; // customized colvis buttons list (every header) 
 
-	ORIGINAL_FEATURE_LIST1.forEach(function (header) {
+	ORIGINAL_FEATURE_LIST.forEach(function (header) {
 		DATA_TABLE_CONFIG["columns"].push({
 			name: header
 		});
@@ -126,7 +153,7 @@ function generate_config (dataset) {
 
 	var colvis_config = {
 		extend: 'collection',
-		text: 'Tags',
+		text: 'Metrics',
 		buttons: colvis_buttons_config,
 		fade: 500
 	};
@@ -141,15 +168,16 @@ function init_visibility () {
 	});
 }
 
-
-// function init_button_style () {
-// 	// $(".table-control > div.dt-buttons").removeClass("btn-group").addClass("btn-group-vertical");
-// 	$(".table-control > div.dt-buttons").removeClass("btn-group");
-// 	$(".table-control > div.dt-buttons > button").removeClass("btn-secondary").addClass("btn-outline-secondary");
-// }
-
-
-
+function init_button_style() {
+  // Select the button container and change its class to vertical button group
+  $(".table-control > div.dt-buttons").removeClass("btn-group").addClass("btn-group-vertical");
+  
+  // Select the buttons, change their class, and add some additional styling
+  $(".table-control > div.dt-buttons > button").removeClass("btn-secondary").addClass("btn-outline-secondary").css({
+    "margin-bottom": "5px",
+    "color": "red"
+  });
+}
 
 
 function select_row_in_table (case_name, from_table) {
@@ -176,3 +204,28 @@ function update_multi_selected_table_view (case_names) {
 }
 
 
+function data_sorting (keyword, desc=false) {
+	var compare = function (a, b) {
+		if (a[keyword] < b[keyword]) {
+			if (desc) {
+				return 1;
+			} else {
+				return -1;
+			}
+		} else if (a[keyword] > b[keyword]) {
+			if (desc) {
+				return -1;
+			} else {
+				return 1;
+			}
+		} else {
+			return 0;
+		}
+	}
+
+	CURRENT_SORT_ATTRIBUTE = keyword;
+	ORIGINAL_DATASET.sort(compare);
+	// ORIGINAL_CASE_LIST = ORIGINAL_DATASET.map(function (d) {return d["Image"];});
+	CURRENT_MULTI_SELECTED.sort(compare);
+	CURRENT_CASE_LIST = CURRENT_MULTI_SELECTED.map(function (d) {return d["Image"];});
+}

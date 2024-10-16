@@ -27,27 +27,22 @@ To function, the input folder must contain NIFTI images (.nii.gz). It doesn't fu
 
 import argparse                                             # Handles command line arguments
 import datetime                                             # Manipulate time values
-from itertools import accumulate                            
+from itertools import accumulate                            # Return series of accumulated sums
 import matplotlib.cm as cm                                  # Interactive colormaps
 import matplotlib.pyplot as plt                             # Interactive plots
 from medpy.io import load                                   # For NIFTI image processing
-import nibabel as nib                                       # Read and write access to common neuroimaging file formats
 import numpy as np                                          # Mathematical operations over arrays
 import os                                                   # Interaction with the operating system
 import pandas as pd                                         # Data analysis
-import pydicom                                              
-from scipy.cluster.vq import whiten                         # Clustering algorithms
-from scipy.io import loadmat                                
+import pydicom                                              # Read DICOM files
+from scipy.io import loadmat                                # Load MATLAB file
 from scipy.ndimage import rotate                            # Rotation of arrays
 from scipy.signal import convolve2d as conv2                # Signal processing, convolution
-from skimage import exposure as ex                          
 from skimage.filters import median                          # Image local median
-from skimage.measure import find_contours                   
+from skimage.measure import find_contours                   # Find iso-valued contours in a 2D array for a given level value
 from skimage.morphology import square                       # Square shaped footprint of an image
-from sklearn.manifold import TSNE                           # t-SNE clustering, dimensionality reduction
 import subprocess                                           # use command-line in python
 import time                                                 # Manipulate time values
-import umap                                                 # UMAP clustering, dimensionality reduction
 import warnings                                             # Warning subsystem
 warnings.filterwarnings("ignore")                           # Remove all warnings like conversion thumbnails
 
@@ -176,7 +171,7 @@ def volume_dicom(scans, name):
         return ori             
     # Creating a dictionnary of DICOM metadata attributes and their values    
     tags = {
-             'ID': name_value,                                  # Patient / Subject ID
+             'ID': name_value,                                  # Image / Subject ID
              'MFR': inf.Manufacturer,                           # Manufacturer name from the file header
              'VRX': format(inf.PixelSpacing[0], '.2f'),         # Voxel resolution in x plane
              'VRY': format(inf.PixelSpacing[1], '.2f'),         # Voxel resolution in y plane
@@ -222,10 +217,12 @@ def saveThumbnails_dicom(v, output):
     elif save_masks_flag=='False':
         ffolder = output
     # Create a directory for images
-    os.makedirs(output + os.sep + v[1]['ID'])       # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    os.makedirs(output + os.sep + v[1]['ID'])
     # Save images as thumbnails
     for i in range(0, len(v[0]), sample_size):
-        plt.imsave(output + os.sep + v[1]['ID'] + os.sep + v[1]['ID'] + '(%d).png' % i, v[0][i], cmap = cm.Greys_r)                             # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+        # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+        plt.imsave(output + os.sep + v[1]['ID'] + os.sep + v[1]['ID'] + '(%d).png' % i, v[0][i], cmap = cm.Greys_r)
     # Print the number of saved images and the directory
     print('The number of %d images are saved to %s' % (len(v[0]),output + os.sep + v[1]['ID']))
     return ffolder + os.sep + v[1]['ID']
@@ -240,8 +237,8 @@ class BaseVolume_dicom(dict):
         # Initialize attributes within the dictionary
         self["warnings"] = [] 
         self["output"] = []
-        # Add patient information to the output list
-        self.addToPrintList("Patient", v[1]['ID'], v, ol, 170)
+        # Add image information to the output list
+        self.addToPrintList("Image", v[1]['ID'], v, ol, 170)
         # Add the directory content to the output list
         self["outdir"] = fname_outdir
         self.addToPrintList("Name of Images", os.listdir(fname_outdir + os.sep + v[1]['ID']), v, ol, 100)
@@ -283,9 +280,9 @@ class BaseVolume_dicom(dict):
         # Add a new key-value pair to the dictionary
         self[name] = val
         self["output"].append(name)
-        # Display information about the patient's metrics
+        # Display information about the image's metrics
         if name != 'Name of Images' and il != 170:
-            print('%s-%s. The %s of the patient with the name of <%s> is %s' % (ol,il,name, v[1]['ID'], val))
+            print('%s-%s. The %s of the image with the name of <%s> is %s' % (ol,il,name, v[1]['ID'], val))
 
 
 #################### NIFTI files processing ####################
@@ -311,6 +308,7 @@ def brain_extraction(scan, output_masks):
 
 
 def volume_nifti(scan, name):
+    
     # Loading image data and header
     image_data, image_header = load(scan)
     # Get image dimensions
@@ -324,15 +322,18 @@ def volume_nifti(scan, name):
         images = [image_data[:, :, i] for i in range(image_shape[2])]
     else:                                                                           # 3D
         images = [image_data[:, :, i] for i in range(image_shape[2])]
+    
     # Return image, name and image header
     return images, name, image_header
 
 
 def volume_nifti_masks(mask_path):
     
-    # Transform mask into 3D volume
+    # Transform mask data and header
     mask_data, mask_header = load(mask_path)
+    # Get mask dimensions
     mask_shape = np.shape(mask_data)
+    # Extract the 2D masks from the 3D mask data
     if mask_shape[0] < mask_shape[1] and mask_shape[0] < mask_shape[2]:         # Sagittal
         masks = [mask_data[i, :, :] for i in range(mask_shape[0])]
     elif mask_shape[1] < mask_shape[0] and mask_shape[1] < mask_shape[2]:       # Coronal
@@ -344,18 +345,14 @@ def volume_nifti_masks(mask_path):
         
     mask_name = os.path.basename(mask_path).split('.')[0]
     
+    # Return image, name and image header
     return masks, mask_name, mask_header
 
 
 def saveThumbnails_nondicom(v, output, masks):
     # Create a directory for images
-    os.makedirs(output + os.sep + v[1])             # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
-    '''
-    # Save images as thumbnails, with a rotation
-    for i in range(len(v[0])):
-        # Save the images. Because of the precedent image processing operations, the image was rotated 90° in anti-clockwise. So we apply a 90° clockwise rotation
-        plt.imsave(output + os.sep + v[1] + os.sep + v[1] + '(%d).png' % int(i+1), scipy.ndimage.rotate(v[0][i],90), cmap = cm.Greys_r)         # Le chemin + nom qu'ont les images.png dans leur dossier respectif
-    '''
+    # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    os.makedirs(output + os.sep + v[1])
     # Save images as thumbnails, with the mask contours
     for i in range(len(v[0])):
         # Extract the image and the corresponding mask slice
@@ -389,7 +386,7 @@ class BaseVolume_nondicom(dict):
         self["output"] = []
         
         # Add information to the output list
-        self.addToPrintList("Patient", v[1], v, ol, 170)
+        self.addToPrintList("Image", v[1], v, ol, 170)
         self["outdir"] = fname_outdir
         self.addToPrintList("Name of Images", os.listdir(fname_outdir + os.sep + v[1]), v, ol, 100)
         self.addToPrintList("VRX", format(v[2].get_voxel_spacing()[0], '.2f'), v, ol, 1)
@@ -420,12 +417,12 @@ class BaseVolume_nondicom(dict):
         # Add a new key-value pair to the dictionary
         self[name] = val
         self["output"].append(name)
-        # Display information about the patient's metrics
+        # Display information about the image's metrics
         if name != 'Name of Images' and il != 170:
-            print('%s-%s. The %s of the patient with the name of <%s> is %s' % (ol,il,name, v[1], val))
+            print('%s-%s. The %s of the image with the name of <%s> is %s' % (ol,il,name, v[1], val))
 
 
-#################### MAT files processing ####################
+##################### MAT files processing #####################
 ################################################################
 
 
@@ -447,10 +444,12 @@ def saveThumbnails_mat(v, output):
     elif save_masks_flag=='False':
         ffolder = output
     # Create a directory for images 
-    os.makedirs(output + os.sep + v[1]['ID'])       # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
+    os.makedirs(output + os.sep + v[1]['ID'])
     # Save image as thumbnails
     for i in range(np.shape(v[0])[2]):
-        plt.imsave(output + os.sep + v[1]['ID']+ os.sep + v[1]['ID'] + '(%d).png' % int(i+1), v[0][:,:,i], cmap = cm.Greys_r)                   # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+        # Le chemin + nom qu'ont les images.png dans leur dossier respectif
+        plt.imsave(output + os.sep + v[1]['ID']+ os.sep + v[1]['ID'] + '(%d).png' % int(i+1), v[0][:,:,i], cmap = cm.Greys_r)
         # Print the number of saved images and the directory
     print('The number of %d images are saved to %s' % (np.shape(v[0])[2],output + os.sep + v[1]['ID']))
     return ffolder + os.sep + v[1]['ID']
@@ -466,8 +465,8 @@ class BaseVolume_mat(dict):
         self["warnings"] = [] 
         self["output"] = []
         
-        # Add patient information to the output list
-        self.addToPrintList("Patient", v[1]['ID'], v, ol, 170)
+        # Add image information to the output list
+        self.addToPrintList("Image", v[1]['ID'], v, ol, 170)
         
          # Add information to the output list
         self["outdir"] = fname_outdir
@@ -496,9 +495,9 @@ class BaseVolume_mat(dict):
         # Add a new key-value pair to the dictionary
         self[name] = val
         self["output"].append(name)
-        # Display information about the patient's metrics
+        # Display information about the image's metrics
         if name != 'Name of Images' and il != 170:
-            print('%s-%s. The %s of the patient with the name of <%s> is %s' % (ol,il,name, v[1]['ID'], val))
+            print('%s-%s. The %s of the image with the name of <%s> is %s' % (ol,il,name, v[1]['ID'], val))
 
 
 #################### Image processing #######################
@@ -534,21 +533,6 @@ def vol(v, volume_masks, sample_size, kk, outi_folder, ch_flag):
         # I = I - np.min(I)  # for CT 
         # Calculate foreground and background intensities
         F, B, c, f, b = foreground(I, msk, outi_folder, v, i)
-        '''
-        # Debug
-        # Plot img, msk, fore_image, and back_image
-        fig, axs = plt.subplots(1, 4, figsize=(16, 4))
-        axs[0].imshow(I, cmap='gray')
-        axs[0].set_title('Image (img)')
-        axs[1].imshow(msk, cmap='gray')
-        axs[1].set_title('Mask (msk)')
-        axs[2].imshow(F, cmap='gray')
-        axs[2].set_title('Foreground (fore_image)')
-        axs[3].imshow(B, cmap='gray')
-        axs[3].set_title('Background (back_image)')
-        plt.show()
-        '''
-        
         # Check if the standard deviation of foreground is zero, skip computing measures
         if np.std(F) == 0:  # whole zero slice, no measure computing
             continue
@@ -563,7 +547,6 @@ def vol(v, volume_masks, sample_size, kk, outi_folder, ch_flag):
     return np.mean(M)
 
 
-
 def foreground(img, msk, save_folder, v, inumber):
     
     # Get the image and the mask to compute the foreground and the background
@@ -571,13 +554,14 @@ def foreground(img, msk, save_folder, v, inumber):
     back_image = (1 - msk) * img
          
     # if not os.path.isdir(save_folder + os.sep + v[1]['ID']):                              
-    return fore_image, back_image, msk, img[msk == 1], img[msk == 0]         # fore_image = F    back_image = B      conv_hull = c       img[conv_hull] = f      img[conv_hull==False] = b
+    return fore_image, back_image, msk, img[msk == 1], img[msk == 0]
+    # fore_image = F    back_image = B      conv_hull = c       img[conv_hull] = f      img[conv_hull==False] = b
 
 
 #################### Image quality control metrics ####################
 #######################################################################
 
-# All the computed measurements are average values over the entire volume, which are calculated for every single slice separately.
+# All the computed measurements are average values over the entire volume, which are calculated for every slice
 
 
 # Mean of the foreground intensity values
@@ -723,73 +707,17 @@ def worker_callback(s,fname_outdir):
         first = False
         # Write comment lines for headers
         csv_report.write("\n".join(["#" + s for s in headers])+"\n")
-        csv_report.write("#dataset:"+"\t".join(s["output"])+"\n")
+         # Write headers to the file
+        csv_report.write("#dataset:" + "\n")
+        # Write the output metric names
+        csv_report.write("\t".join(s["output"]) + "\n")
     
     # Write data to the CSV report file                     
-    csv_report.write("\t".join([str(s[field]) for field in s["output"]])+"\n")          # replace replace_nan by str
+    csv_report.write("\t".join([str(s[field]) for field in s["output"]])+"\n")  # replace replace_nan by str
     csv_report.flush()      # Flush the buffer to ensure writing immediately
     nfiledone += 1          # Increment the count of processed files
     print('The results are updated.')
-
-
-#################### Data dimensionality reduction and classification ####################
-##########################################################################################
-
-
-def tsv_to_dataframe(tsvfileaddress):       # Creates a dataframe with all the data extracted from metadata and calculated from images
-    # This creates the dataframe used for the tables, graphs, charts, UMAP and TSNE.
-    # If you change things here (columns or rows used), it will modify what is shown in the user interface
-    return pd.read_csv(tsvfileaddress, sep='\t', skiprows=2, header=0)          # Read the CSV file into a pandas dataframe, skipping the first two rows and using the third row as headers
-
-
-def data_whitening(dframe):
-    # Fill missing values with N/A in the dataframe
-    dframe = dframe.fillna('N/A')
-    # Create a copy of the dataframe     
-    df = dframe.copy()
-    # Select columns excluding object type
-    df = df.select_dtypes(exclude=['object'])
-    # Enter the names of the columns you want included for the UMAP and TSNE 
-    df = df[["MEAN", "RNG", "VAR", "CV", "CPP", "PSNR","SNR1", "SNR2", "SNR3", "SNR4", "CNR", "CVP", "CJV", "EFC", "FBER"]]
-    # Apply whitening transformation to the selected numeric data. The data calculated from the images are transformed to be used by UMAP and TSNE
-    ds = whiten(df)  
-    # Returns the transformed dataset : these are the data used by UMAP and TSNE
-    return ds
-
-
-def tsne_umap(dataframe, per):
-    # Apply data whitening to the dataframe. Is used for TSNE and UMAP
-    ds = data_whitening(dataframe)
-    # Performs t-SNE on the transformed dataset. Perplexity must be less than n subjects. default = 30. Usually between 5 and 50
-    tsne = TSNE(n_components=2, random_state=0, perplexity = 5)
-    # Learns the parameters, fit to data and applies the transformation to new dataset
-    tsne_obj = tsne.fit_transform(ds)       
-    # Add t-SNE components to the original DataFrame as 'x' and 'y'
-    dataframe['x'] = tsne_obj[:,0].astype(float)
-    dataframe['y'] = tsne_obj[:,1].astype(float)
-    # Performs UMAP dimensionality reduction
-    reducer = umap.UMAP()
-    # Learns the parameters, fit to data and applies the transformation to new dataset                               
-    reducer_obj = reducer.fit_transform(ds)     
-    # Add UMAP components to the original DataFrame as 'u' and 'v'
-    dataframe['u'] = reducer_obj[:,0]
-    dataframe['v'] = reducer_obj[:,1]
-
-
-def cleanup(final_address, per):
-    # Read data from the final TSV file into a dataframe
-    df = tsv_to_dataframe(final_address)
-    # Apply t-SNE and UMAP dimensionality reduction on the dataframe
-    tsne_umap(df, per)
-    # Read only the header row from the final TSV file
-    hf = pd.read_csv(final_address, sep='\t',  nrows=1)
-    # Write the header row back to the same CSV file (overwriting the existing file)
-    hf.to_csv(final_address, index = None, header=True, sep = '\t', mode = 'w')
-    # Append the modified dataframe to the CSV file (below the header)
-    df.to_csv(final_address, index = None, header=True, sep = '\t', mode = 'a')
-    # Return the modified dataframe
-    return df
-
+    
 
 #############################################################################################################################
 ##########################                Print message box at the end of the code                 ##########################
@@ -838,11 +766,12 @@ if __name__ == '__main__':
                         help = "input foldername consists of *.mha (*.nii or *.dcm) files. For example: 'E:\\Data\\Rectal\\input_data_folder'",
                         nargs = "*")
     parser.add_argument('-r', help="folders as name", default=False)
-    parser.add_argument('-s', help="save foreground masks", default=False)
+    parser.add_argument('-m', help="save foreground masks", default=False)
     parser.add_argument('-b', help="number of samples", default=1, type = int)
     parser.add_argument('-u', help="percent of middle images", default=100)
     parser.add_argument('-t', help="the address of the user-specified tags list (*.txt)", default=0)
     parser.add_argument('-c', help="if yes the ch computes objects", default=False)
+    parser.add_argument('-s', help="type of scan (MRI or CT)", default='MRI', choices=['MRI', 'CT'])
     
     args = parser.parse_args() 
     root = args.inputdir[0]     # root = input_directory
@@ -852,33 +781,45 @@ if __name__ == '__main__':
         folders_flag = "False"
     else: 
         folders_flag = args.r
-    if args.s == 0:
+        
+    if args.m == 0:
         save_masks_flag = "False" 
     else: 
-        save_masks_flag = args.s
+        save_masks_flag = args.m
+        
     if args.b != 1:
         sample_size = args.b
     else: 
         sample_size = 1
+        
     if args.u != 100:
         middle_size = int(args.u)
     else: 
         middle_size = 100
+        
     if args.t != 0:
         tag_names = [line.strip() for line in open(args.t, "r")]
-        tag_list = [line.strip().replace(" ", "") for line in open(args.t, "r")] 
+        tag_list = [line.strip().replace(" ", "") for line in open(args.t, "r")]
+        
     if args.c == 0:
         ch_flag = "False"
     else: 
         ch_flag = args.c 
+        
+    if args.s == 0:
+        scan_type = "MRI"
+    else:
+        scan_type = args.s
     
-    # print(os.getcwd())
-    print_folder_note = os.getcwd() + os.sep + 'UserInterface'                                  # Les résultats vont dans le dossier UserInterface (dans MRQy)
-    # print(print_folder_note)
-    fname_outdir = print_folder_note + os.sep + 'Data' + os.sep + args.output_folder_name       # Un dossier "Data" dans UserInterface va contenir les résultats de l'analyse des images
+    # Les résultats vont dans le dossier UserInterface (dans MRQy)
+    print_folder_note = os.getcwd() + os.sep + 'UserInterface'
+    # Un dossier "Data" dans UserInterface va contenir les résultats de l'analyse des images
+    fname_outdir = print_folder_note + os.sep + 'Data' + os.sep + args.output_folder_name
     
     overwrite_flag = "w"        
-    headers.append(f"outdir:\t{os.path.realpath(fname_outdir)}") 
+    headers.append(f"outdir:\t{os.path.realpath(fname_outdir)}")
+    headers.append(f"scantype:\t{scan_type}")
+    
     patients, names, dicom_spil, nondicom_spli, nondicom_names, mat_spli, mat_names = file_name(root)
 
     # Determine data types and set corresponding flags
@@ -948,17 +889,13 @@ if __name__ == '__main__':
     # Create the path for the result TSV file
     address = fname_outdir + os.sep + "results" + ".tsv" 
     
-
-    if len(names) < 6:
-        # t-SNE and UMPA cannot be performed if we have less than 6 images
-        print('Skipped the t-SNE and UMAP computation because of insufficient data. The UMAP and t-SNE process need at least 6 input data.')
-        df = tsv_to_dataframe(address)
-    else:    
-        df = cleanup(address, 30)
-        df = df.drop(['Name of Images'], axis=1)
-        df = df.rename(columns={"#dataset:Patient": "Patient", "x":"TSNEX","y":"TSNEY", "u":"UMAPX", "v":"UMAPY" })
-        df = df.fillna('N/A')
-
+    # This creates the dataframe used for the tables, graphs, charts, UMAP and TSNE.
+    # If you change things here (columns or rows used), it will modify what is shown in the user interface
+    # Read the CSV file into a pandas dataframe, skipping the first two rows and using the third row as headers
+    df = pd.read_csv(address, sep='\t', skiprows=4, header=0)
+    df = df.drop(['Name of Images'], axis = 1)
+    df = df.fillna('N/A')
+    
     # Save processed data as IQM.csv
     df.to_csv(fname_outdir + os.sep + 'IQM.csv', index=False)
     print("The IQMs data are saved in the {} file. ".format(fname_outdir + os.sep + "IQM.csv"))
@@ -966,7 +903,7 @@ if __name__ == '__main__':
     # Print execution information
     print("Done!")
     print("MRQy program took", format((time.time() - start_time)/60, '.2f'), \
-          "minutes for {} subjects and the overal {} MRI slices to run.".format(len(names),len(patients)))
+          "minutes for {} images to run.".format(len(names)))
     
     # Provide guidance for viewing the final results in the MRQy interface
     msg = "Please go to the '{}' directory and open up the 'index.html' file.\n".format(print_folder_note) + \

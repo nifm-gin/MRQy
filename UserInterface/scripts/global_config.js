@@ -3,8 +3,10 @@
  **********************************************/
 
 /***************** SYSTEM CONFIG **************/
-var DATA_PATH = "/data_hdd/RADIO-AIDE/QualityControlMRQY/Data_Processed/";			/***** absolute path - for relative path, write ./Data/ 										*****/
-																					/***** here you should write the path where you want to send the results of the MRQy analysis 	*****/  
+/***** absolute path - for relative path, write ./Data/ *****/
+var DATA_PATH = "/data_hdd/RADIO-AIDE/QualityControlMRQY/Data_Processed/";			
+/***** here you should write the path where you want to send the results of the MRQy analysis *****/  
+
 var OPEN_WITH_TABLE = true,
     OPEN_WITH_TABLE_meas = true,
 	OPEN_WITH_CHART = true,
@@ -35,4 +37,3 @@ var DEFAULT_VIS_TYPE = "parallel_coordinate";
 var DEFAULT_IMAGE_EXTENSIONS = [
     "_thumb.png"
 ];
-

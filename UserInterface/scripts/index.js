@@ -1,4 +1,3 @@
-
 $(document).ready(function () {
 	console.log("[LOG] Document ready.")
 
@@ -32,9 +31,6 @@ function reset_views_size () {
 			}
 		}
 	}
-
-	// update_chart_view("both", CURRENT_MULTI_SELECTED);
-	// update_image_view_height();
 }
 
 

@@ -1,51 +1,18 @@
-
 function initialize_image_view (case_list) {
 
 	show_view("image");
-	// update_image_view_height();
 
 	var $div = $("#overview-gallery");
 	$div.empty();
 
 	CURRENT_CASE_LIST = ORIGINAL_CASE_LIST;
-
-	// for (var i = 0; i < case_list.length; i++) {
-	// 	$div.append(generate_img_block("overview-image-block", case_list[i], CURRENT_IMAGE_TYPE, CURRENT_COMPARE_TYPE, case_list[i]));
-	// }
  
 	$div.children("div").children("img").click(function(){
 		src_list = this.src.split('/');
 		enter_select_mode(src_list[src_list.length-2]);
 	});
 
-	// console.log($div)
-
-	// init_image_selector();
 }
-
-// function update_image_view (case_list) {
-// 	// TODO: rewrite update function.
-
-// 	// update_image_view_height();
-
-// 	var $div = $("#overview-gallery");
-// 	// console.log($div)
-// 	$div.empty();
-
-// 	// for (var i = 0; i < ORIGINAL_CASE_LIST.length; i++) {
-// 	// 	$div.append(generate_img_block("overview-image-block", ORIGINAL_CASE_LIST[i], CURRENT_IMAGE_TYPE, CURRENT_COMPARE_TYPE, ORIGINAL_CASE_LIST[i]));
-// 	// }
- 
-// 	$div.children("div").children("img").click(function(){
-// 		src_list = this.src.split('/');
-// 		enter_select_mode(src_list[src_list.length-2]);
-// 	});
-
-// 	// console.log($div)
-
-
-// 	// update_multi_selected_image_view(case_list);
-// }
 
 
 function update_image_view_height () {
@@ -69,34 +36,22 @@ function enter_select_image_view (dir) {
 	$("#select-image-view").css("display", "flex");
 
 	var $div = $("#select-image-container");
-	// image_name = image_names[0][1];
-	// console.log(image_names);
 
 	var re = /\s*(?:',\s'|$)\s*|\['|'\]/;
-	// var image_names_new = image_names[0].split(re);
-	// delete image_names_new[0]
-	// console.log(image_names_new);
-
-
 	
-	for (var j = 0; j < ORIGINAL_DATASET1.length; j ++) {
-		if (patient_names[j] == dir){
+	for (var j = 0; j < ORIGINAL_DATASET.length; j ++) {
+		if (participant_names[j] == dir){
 			var image_names_new = image_names[j].split(re);
 			var collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
 			var myArray = image_names_new;
 			const image_names_new2 = myArray.reverse(myArray.sort(collator.compare));
-			// console.log(image_names_new2);
-			for (var i = 0; i < ORIGINAL_DATASET1[j]["NUM"]; i++) {
-				// console.log(i, ORIGINAL_DATASET1[j]["Patient"])
+			for (var i = 0; i < ORIGINAL_DATASET[j]["NUM"]; i++) {
 				$div.append("<img id='exibit-img' src='" + generate_img_src(dir, CURRENT_IMAGE_TYPE,image_names_new2[i])+ "'/>");
 			}
 		}
 	}
 
-	
-
 	$div = $("#select-candidate-container");
-
 
 	$("#select-candidate-container > div > img").dblclick(function(){
 		enter_detail_image_view($(this).attr("file_name"), $(this).attr("img_type"), this.src);
@@ -147,12 +102,6 @@ function calculate_height ($div) {
 
 function generate_img_src (file_name, img_type_index, image_name) {
 	var image_extension = DEFAULT_IMAGE_EXTENSIONS[img_type_index];
-	// if (use_small && SMALL_IMAGE_EXTENSIONS.indexOf(image_extension) >= 0) {
-	// 	image_extension = image_extension.split(".")[0] + "_small.png";
-	// }
-	// return DATA_PATH + file_name + "/" + file_name + image_extension
-	// image_name = '000001';
-	// return [DATA_PATH + file_name + "/" +  image_name  + image_extension];
 	return [DATA_PATH + file_name + "/" +  image_name ];
 
 }
@@ -172,5 +121,3 @@ function enter_detail_image_view (file_name, img_type, src) {
 		$("#overlay-image > figure").width(img_width * (figure_height / img_height));
 	}
 }
-
-

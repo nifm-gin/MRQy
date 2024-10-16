@@ -1,5 +1,3 @@
-
-
 function initialize_chart_view (dataset, vis_type="bar_chart") {
 
 	show_view("chart");
@@ -102,7 +100,6 @@ function exit_select_chart_view () {
 }
 
 
-
 function init_bar_chart (dataset) {
 	var svg = CHART_SVG;
 	var chart_width = $CHART.width() - CHART_MARGIN.left - CHART_MARGIN.right;
@@ -111,7 +108,7 @@ function init_bar_chart (dataset) {
 
 	var data = dataset.map(function (d) {
 		return {
-			case_name: d["Patient"],
+			case_name: d["Image"],
 			attr_value: d[CURRENT_CHART_ATTRIBUTE]
 		};
 	});
@@ -197,6 +194,7 @@ function init_bar_chart (dataset) {
 		});
 }
 
+
 function init_parallel_coordinate (dataset) {
 
 	$PARAC.css("display", "block");
@@ -221,7 +219,7 @@ function init_parallel_coordinate (dataset) {
 		foreground;
 
 	var data = dataset.map(function (d) {
-		attr_value_dict = {case_name: d["Patient"]};
+		attr_value_dict = {case_name: d["Image"]};
 		for (var i = 0; i < CURRENT_PARAC_ATTRIBUTES.length; i++) {
 			attr_value_dict[CURRENT_PARAC_ATTRIBUTES[i]] = d[CURRENT_PARAC_ATTRIBUTES[i]];
 		}
@@ -349,11 +347,11 @@ function init_parallel_coordinate (dataset) {
 			extents = actives.map(function (p) { return yScale[p].brush.extent(); });
 
 		selected_files = [];
-		ORIGINAL_DATASET3.forEach(function (d) {
+		ORIGINAL_DATASET.forEach(function (d) {
 			if (actives.every(function (p, i) {
 				return extents[i][0] <= d[p] && d[p] <= extents[i][1];
 			})) {
-				selected_files.push(d["Patient"]);
+				selected_files.push(d["Image"]);
 			}
 		});
 
@@ -364,6 +362,7 @@ function init_parallel_coordinate (dataset) {
 		// update_multi_selected(selected_files);
 	}
 }
+
 
 function update_bar_chart (dataset) {
 
@@ -383,7 +382,7 @@ function update_bar_chart (dataset) {
 
 	var data = dataset.map(function (d) {
 		return {
-			case_name: d["Patient"],
+			case_name: d["Image"],
 			attr_value: d[CURRENT_CHART_ATTRIBUTE]
 		};
 	});
@@ -466,6 +465,7 @@ function update_bar_chart (dataset) {
 		.attr("height", function (d) { return Math.abs(chart_height - yScale(d.attr_value)); });        /* added for negative values*/
 }
 
+
 function update_parallel_coordinate (dataset) {
 	$PARAC.css("display", "block");
 
@@ -488,28 +488,12 @@ function update_multi_selected_chart_view () {
 
 function init_chart_selector (vis_type) {
 
-
-	// TODO: clean up useless code
-
 	$chart_selector = $("#chart-select");
 	$parac_selector = $("#parac-select");
 	$chart_selector.empty();
 	$parac_selector.empty();
 
-
-	// delete ORIGINAL_DATASET[21]
-
-
-	// for (var j = 0; j < ORIGINAL_DATASET.length; j ++) {
-	// 		delete ORIGINAL_DATASET[j]["x"];
-	// 	};
-
-
-
-
-
-
-	var sample_case = ORIGINAL_DATASET3[0];
+	var sample_case = ORIGINAL_DATASET[0];
 
 	for (var index in Object.keys(sample_case)) {
 		var key = Object.keys(sample_case)[index];
@@ -548,7 +532,7 @@ function init_chart_selector (vis_type) {
 
 	$("#chart-sort-btn").click(function () {
 		var sort_attribute = CURRENT_CHART_ATTRIBUTE;
-		var sort_attribute_index = ORIGINAL_FEATURE_LIST3.indexOf(sort_attribute);
+		var sort_attribute_index = ORIGINAL_FEATURE_LIST.indexOf(sort_attribute);
 		TABLE_CHART.order([sort_attribute_index, 'desc']).draw();
 		data_sorting(sort_attribute, true);
 		update_views();
@@ -562,6 +546,7 @@ function init_chart_selector (vis_type) {
 		}
 	}
 }
+
 
 function show_chosen_vis (vis_type) {
 	if (vis_type == "bar_chart") {
@@ -581,8 +566,8 @@ function show_chosen_vis (vis_type) {
 
 
 function generate_current_parac_attributes () {
-	return ORIGINAL_FEATURE_LIST3.filter(function (d) {
-		if (typeof(ORIGINAL_DATASET3[0][d]) == "number" && CURRENT_HIDDEN_COLUMNS.indexOf(d) == -1) {
+	return ORIGINAL_FEATURE_LIST.filter(function (d) {
+		if (typeof(ORIGINAL_DATASET[0][d]) == "number" && CURRENT_HIDDEN_COLUMNS.indexOf(d) == -1) {
 			return true;
 		}
 		return false;

@@ -1,0 +1,9 @@
+medpy
+pydicom  
+pandas
+scikit-learn
+umap-learn
+numpy
+scipy
+matplotlib
+scikit-image

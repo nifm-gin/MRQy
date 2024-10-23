@@ -365,9 +365,13 @@ def saveThumbnails_nondicom(v, output, masks):
         # Plot image and overlay contours
         fig, ax = plt.subplots()
         ax.imshow(img_slice, cmap='gray')
-        # Overlay the contours
+        # Plot the contours of the ROI
         for contour in contours:
             ax.plot(contour[:, 1], contour[:, 0], color='red', linewidth=2)
+        # Plot the contours of the images with a mask
+        if np.any(mask_slice != 0):
+            ax.plot([0, img_slice.shape[1], img_slice.shape[1], 0, 0], [0, 0, img_slice.shape[0], img_slice.shape[0], 0],
+                    color='green', linewidth=10)
         ax.axis('off')  # Turn off the axis
         plt.savefig(output + os.sep + v[1] + os.sep + v[1] + f'({i+1}).png', bbox_inches='tight', pad_inches=0)
         plt.close(fig)  # Close the plot to save memory    
@@ -530,7 +534,9 @@ def vol(v, volume_masks, sample_size, kk, outi_folder, ch_flag):
     for i, mask_number in zip(range(1, len(v[0]), sample_size), range(1, len(volume_masks[0]), sample_size)):
         I = v[0][i]
         msk = volume_masks[0][mask_number]
-        # I = I - np.min(I)  # for CT 
+        # If the mask is null, then ignore slice
+        if np.all(msk == 0):
+            continue
         # Calculate foreground and background intensities
         F, B, c, f, b = foreground(I, msk, outi_folder, v, i)
         # Check if the standard deviation of foreground is zero, skip computing measures
@@ -863,9 +869,9 @@ if __name__ == '__main__':
         if dicom_flag:
             for j in range(len(dicom_spil)):
                 v = volume_dicom(dicom_spil[j], names[j])
-                folder_foregrounds = saveThumbnails_dicom(v,fname_outdir)
-                s = BaseVolume_dicom(fname_outdir, v,j+1,folder_foregrounds, sample_size, ch_flag)
-                worker_callback(s,fname_outdir)
+                folder_foregrounds = saveThumbnails_dicom(v, fname_outdir)
+                s = BaseVolume_dicom(fname_outdir, v, j+1, folder_foregrounds, sample_size, ch_flag)
+                worker_callback(s, fname_outdir)
             dicom_flag = False
             
         if nondicom_flag:
@@ -873,7 +879,7 @@ if __name__ == '__main__':
                 mask = brain_extraction(k, output_masks)
                 v = volume_nifti(k, nondicom_names[l])
                 volume_masks = volume_nifti_masks(mask)
-                saveThumbnails_nondicom(v,fname_outdir, volume_masks[0])
+                saveThumbnails_nondicom(v, fname_outdir, volume_masks[0])
                 s = BaseVolume_nondicom(fname_outdir, v, l+1, k, sample_size, ch_flag)
                 worker_callback(s,fname_outdir)
             nondicom_flag = False
@@ -881,9 +887,9 @@ if __name__ == '__main__':
         if mat_flag:
             for j in range(len(mat_spli)):
                 v = volume_mat(mat_spli[j], mat_names[j])
-                folder_foregrounds = saveThumbnails_mat(v,fname_outdir)
-                s = BaseVolume_mat(fname_outdir, v,j+1,folder_foregrounds)
-                worker_callback(s,fname_outdir)
+                folder_foregrounds = saveThumbnails_mat(v, fname_outdir)
+                s = BaseVolume_mat(fname_outdir, v, j+1, folder_foregrounds)
+                worker_callback(s, fname_outdir)
             mat_flag = False
     
     # Create the path for the result TSV file

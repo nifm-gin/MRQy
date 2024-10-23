@@ -36,15 +36,11 @@ function initialize_data_table (dataset) {
 
 
 function generate_table(dataset, table) {
-    // Step 1: Create the table header
+    // Step 1: Create the table header with Image, New Tag, and Editable Tag Clone columns
     var thead_content = "<tr>";
-    ORIGINAL_FEATURE_LIST.forEach(function(d, i) {
-        // Add the original column header
+    thead_content += "<th>Image</th><th>Tag</th><th>QC_Tag</th>"; // First columns: Image, New Tag, and Editable Clone
+    ORIGINAL_FEATURE_LIST.slice(1).forEach(function(d) {  // Skip the original first column
         thead_content += "<th>" + d + "</th>";
-        // Add the cloned column header (MRI Modality after QC) after the first column
-        if (i === 0) {
-            thead_content += "<th>MRI Modality after QC</th>";
-        }
     });
     thead_content += "</tr>";
 
@@ -52,7 +48,25 @@ function generate_table(dataset, table) {
     var tbody_content = "";
     for (var i = 0; i < dataset.length; i++) {
         tbody_content += "<tr>";
-        for (var j = 0; j < ORIGINAL_FEATURE_LIST.length; j++) {
+        
+        // Get the value of the first column (assuming it contains the image name)
+        var imageName = dataset[i][ORIGINAL_FEATURE_LIST[0]];
+        
+        // Split the image name based on underscores to extract the new tag
+        var imageParts = imageName.split('_');
+        var newTag = imageParts.slice(4, 5).join('_') || 'N/A'; // 5th part for New Tag, or 'N/A' if missing
+        
+        // Add the Image column (unchanged)
+        tbody_content += "<td>" + imageName + "</td>"; // Image (unchanged)
+        
+        // Add the New Tag column
+        tbody_content += "<td>" + newTag + "</td>"; // New Tag
+        
+        // Add the Editable Clone of the New Tag column
+        tbody_content += "<td contenteditable='true'>" + newTag + "</td>"; // Editable Clone of New Tag
+
+        // Add the remaining columns (excluding the first one which we already processed)
+        for (var j = 1; j < ORIGINAL_FEATURE_LIST.length; j++) {
             var cellContent = dataset[i][ORIGINAL_FEATURE_LIST[j]];
             if (typeof cellContent === 'number') {
                 if (Math.abs(cellContent) >= 1e5) {
@@ -64,13 +78,7 @@ function generate_table(dataset, table) {
                 cellContent = 'N/A';
             }
 
-            // Original column data
             tbody_content += "<td>" + cellContent + "</td>";
-
-            // Add the cloned column with editable content, after the first column
-            if (j === 0) {
-                tbody_content += "<td contenteditable='true' class='editable'>" + cellContent + "</td>";
-            }
         }
         tbody_content += "</tr>";
     }
@@ -96,6 +104,7 @@ function generate_table(dataset, table) {
     }
     TABLE = table.DataTable(DATA_TABLE_CONFIG);
 }
+
 
 
 function generate_config (dataset) {
@@ -229,3 +238,81 @@ function data_sorting (keyword, desc=false) {
 	CURRENT_MULTI_SELECTED.sort(compare);
 	CURRENT_CASE_LIST = CURRENT_MULTI_SELECTED.map(function (d) {return d["Image"];});
 }
+
+
+$("#save-button").on("click", function() {
+    // Créer un tableau pour stocker les données mises à jour
+    var updatedData = [];
+
+    // Parcourir toutes les lignes du tableau, y compris celles qui ne sont pas visibles
+    TABLE.rows().every(function() {
+        var rowData = {};
+        var rowNodes = this.nodes().to$(); // Récupérer l'élément jQuery pour la ligne
+
+        rowNodes.find('td').each(function(index) {
+            // Nom de la colonne correspondant à l'index
+            var columnName = ORIGINAL_FEATURE_LIST[index];
+            var cellValue = $(this).text(); // Récupère la valeur de la cellule
+            rowData[columnName] = cellValue;
+        });
+
+        updatedData.push(rowData); // Ajoute les données de la ligne au tableau
+    });
+
+    // Mettre à jour le dataset original avec les nouvelles données
+    ORIGINAL_DATASET = updatedData;
+
+    console.log("Données sauvegardées : ", ORIGINAL_DATASET);
+    alert("Modifications sauvegardées !");
+});
+
+
+
+
+// Fonction pour convertir le tableau visible avec les données modifiées en CSV
+function tableToCSV(table) {
+    var csv = [];
+    
+    // Récupérer les en-têtes visibles du tableau
+    var headers = [];
+    $(table).find('thead th').each(function() {
+        headers.push($(this).text().trim());  // En-têtes visibles
+    });
+    csv.push(headers.join(','));  // Ajouter les en-têtes au CSV
+
+    // Récupérer les données modifiées visibles du tableau
+    $(table).find('tbody tr').each(function() {
+        var row = [];
+        $(this).find('td').each(function() {
+            var cellValue = $(this).text().trim();  // Récupérer la valeur modifiée dans chaque cellule
+            row.push(cellValue);
+        });
+        csv.push(row.join(','));  // Ajouter la ligne au CSV
+    });
+
+    return csv.join('\r\n');
+}
+
+// Gestionnaire d'événement pour exporter le tableau visible et modifié en CSV
+$("#export-csv-button").on("click", function() {
+    var csv = tableToCSV("#result-table");
+    var dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+    var downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "table_data.csv");
+    document.body.appendChild(downloadAnchorNode); // nécessaire pour Firefox
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+});
+
+
+// Appliquer des styles pour éviter l'extension lors de l'édition
+$('#result-table').on('focus', 'td.editable', function() {
+    $(this).css({
+        'min-width': $(this).width(), // Fixe la largeur courante
+        'max-width': $(this).width(),
+        'overflow': 'hidden',
+        'text-overflow': 'ellipsis',
+        'white-space': 'nowrap'
+    });
+});

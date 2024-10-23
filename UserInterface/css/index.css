@@ -417,7 +417,7 @@ g.tick > text {
 
 #umap-svg-container {
     flex:1;
-    height: 85%;
+    height: 100%;
 	/* border: 5px solid black;*/
 }
 

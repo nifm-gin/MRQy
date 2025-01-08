@@ -32,7 +32,7 @@ jQuery.fn.dataTable.Api.register('MakeCellsEditable()', function (settings) {
             var row = table.row($(callingElement).parents('tr'));
             var cell = table.cell($(callingElement).parent());
             var columnIndex = cell.index().column;
-            var inputField =getInputField(callingElement);
+            var inputField = getInputField(callingElement);
 
             // Update
             var newValue = inputField.val();
@@ -69,7 +69,7 @@ jQuery.fn.dataTable.Api.register('MakeCellsEditable()', function (settings) {
             }
             // Get current page
             var currentPageIndex = table.page.info().page;
-            
+
             //Redraw table
             table.page(currentPageIndex).draw(false);
         },
@@ -119,23 +119,23 @@ jQuery.fn.dataTable.Api.register('MakeCellsEditable()', function (settings) {
             }
         });
     }
-    
+
 });
 
 function getInputHtml(currentColumnIndex, settings, oldValue) {
     var inputSetting, inputType, input, inputCss, confirmCss, cancelCss;
 
-    input = {"focus":true,"html":null}
+    input = { "focus": true, "html": null }
 
-    if(settings.inputTypes){
-		$.each(settings.inputTypes, function (index, setting) {
-			if (setting.column == currentColumnIndex) {
-				inputSetting = setting;
-				inputType = inputSetting.type.toLowerCase();
-			}
-		});
-	}
-    
+    if (settings.inputTypes) {
+        $.each(settings.inputTypes, function (index, setting) {
+            if (setting.column == currentColumnIndex) {
+                inputSetting = setting;
+                inputType = inputSetting.type.toLowerCase();
+            }
+        });
+    }
+
     if (settings.inputCss) { inputCss = settings.inputCss; }
     if (settings.confirmationButton) {
         confirmCss = settings.confirmationButton.confirmCss;
@@ -166,33 +166,33 @@ function getInputHtml(currentColumnIndex, settings, oldValue) {
                 alert("jQuery UI is required for the DatePicker control but it is not loaded on the page!");
                 break;
             }
-	        jQuery(".datepick").datepicker("destroy");
-	        input.html = "<input id='ejbeatycelledit' type='text' name='date' class='datepick " + inputCss + "'   value='" + oldValue + "'></input> &nbsp;<a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a>";
-	        setTimeout(function () { //Set timeout to allow the script to write the input.html before triggering the datepicker 
-	            var icon = "http://jqueryui.com/resources/demos/datepicker/images/calendar.gif";
+            jQuery(".datepick").datepicker("destroy");
+            input.html = "<input id='ejbeatycelledit' type='text' name='date' class='datepick " + inputCss + "'   value='" + oldValue + "'></input> &nbsp;<a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a>";
+            setTimeout(function () { //Set timeout to allow the script to write the input.html before triggering the datepicker 
+                var icon = "http://jqueryui.com/resources/demos/datepicker/images/calendar.gif";
                 // Allow the user to provide icon 
-	            if (typeof inputSetting.options !== 'undefined' && typeof inputSetting.options.icon !== 'undefined') {
-	                icon = inputSetting.options.icon;
-	            }
-	            var self = jQuery('.datepick').datepicker(
+                if (typeof inputSetting.options !== 'undefined' && typeof inputSetting.options.icon !== 'undefined') {
+                    icon = inputSetting.options.icon;
+                }
+                var self = jQuery('.datepick').datepicker(
                     {
                         showOn: "button",
                         buttonImage: icon,
                         buttonImageOnly: true,
                         buttonText: "Select date"
                     });
-	        },100);
-	        break;
+            }, 100);
+            break;
         case "text-confirm": // text input w/ confirm
-            input.html = "<input id='ejbeatycelledit' class='" + inputCss + "' value='"+oldValue+"'></input>&nbsp;<a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a> ";
+            input.html = "<input id='ejbeatycelledit' class='" + inputCss + "' value='" + oldValue + "'></input>&nbsp;<a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a> ";
             break;
         case "undefined-confirm": // text input w/ confirm
             input.html = "<input id='ejbeatycelledit' class='" + inputCss + "' value='" + oldValue + "'></input>&nbsp;<a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a> ";
             break;
-        case "textarea": 
+        case "textarea":
         case "textarea-confirm":
-            input.html = "<textarea id='ejbeatycelledit' class='" + inputCss + "'>"+oldValue+"</textarea><a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a>";
-            break;            
+            input.html = "<textarea id='ejbeatycelledit' class='" + inputCss + "'>" + oldValue + "</textarea><a href='javascript:void(0);' class='" + confirmCss + "' onclick='$(this).updateEditableCell(this)'>Confirm</a> <a href='javascript:void(0);' class='" + cancelCss + "' onclick='$(this).cancelEditableCell(this)'>Cancel</a>";
+            break;
         default: // text input
             input.html = "<input id='ejbeatycelledit' class='" + inputCss + "' onfocusout='$(this).updateEditableCell(this)' value='" + oldValue + "'></input>";
             break;
@@ -214,7 +214,7 @@ function getInputField(callingElement) {
             if ($(callingElement).siblings('textarea').length > 0) {
                 inputField = $(callingElement).siblings('textarea');
             }
-        break;
+            break;
         default:
             inputField = $(callingElement);
     }

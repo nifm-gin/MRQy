@@ -41,6 +41,7 @@ function enter_select_image_view (dir) {
 	
 	for (var j = 0; j < ORIGINAL_DATASET.length; j ++) {
 		if (participant_names[j] == dir){
+			console.log(dir);
 			var image_names_new = image_names[j].split(re);
 			var collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
 			var myArray = image_names_new;

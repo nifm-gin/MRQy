@@ -75,7 +75,7 @@ function data_loading() {
 		}).map(function (row, j) {
 		    image_names[j] = row["Name of Images"];
 		    participant_names[j] = row["Image"];
-		    delete row["Name of Images"];
+		    // delete row["Name of Images"];
 		    return row;
 		});
 

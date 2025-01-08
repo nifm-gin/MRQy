@@ -1,753 +1,774 @@
 var columnClicked = false;
 var selectedCaseName = null;
 
+function initializeUmapView(dataset = ORIGINAL_DATASET, colorColumn = "MFR") {
+	
+	var style = document.createElement("style");
+  		style.innerHTML = `
+      		.horizontal-line {
+        		width: 100%;
+        		height: 1px;
+        		background-color: black;
+        		position: relative;
+        		top: -10px;
+      		}
+      		.umap-text {
+        		font-weight: bold;
+        		text-align: center;
+        		font-size: 16px;
+        		position: relative;
+        		top: -15px;
+      		}
+  		`;
 
-function initializeUmapView(dataset = ORIGINAL_DATASET, colorColumn = 'MFR') {
-  var style = document.createElement('style');
-    style.innerHTML = `
-      .horizontal-line {
-        width: 100%;
-        height: 1px;
-        background-color: black;
-        position: relative;
-        top: -10px;
-      }
-      .umap-text {
-        font-weight: bold;
-        text-align: center;
-        font-size: 16px;
-        position: relative;
-        top: -15px;
-      }
-    `;
-  document.head.appendChild(style);
-  var umapControlContainer = d3.select("#umap-control-container").append("div");
-  umapControlContainer.append("div")
-      .attr("class", "umap-text")
-      .text("UMAP Hyperparameters");
-  umapControlContainer.append("div").attr("class", "horizontal-line");
-
-  var umapSvgContainer = d3.select("umap-svg-container").append("div")
-  var umapContainer = d3.select("#umap-selection-container").append("div")
-
-  ///////////////////////////// Choisir les colonnes pour l'umap
-  /////////////////////////////
-  // Conteneur flottant pour les colonnes
-  var columnSelectionContainer = d3.select("body").append("div")
-    .attr("id", "column-selection-container")
-    .style("position", "absolute")
-    // .style("top", "100px")  // Ajustez pour le placer en dessous du bouton
-    .style("right", "70%")  // Centré horizontalement
-    .style("transform", "translateX(-50%)")  // Pour centrer précisément
-    .style("width", "300px")
-    .style("max-height", "150px") // Limite la hauteur du menu
-    .style("overflow-y", "auto")   // Active le défilement vertical
-    .style("border", "1px solid black")
-    .style("border-radius", "5px")
-    .style("padding", "10px")
-    .style("background-color", "white")
-    .style("z-index", "1000")
-    .style("box-shadow", "0px 4px 10px rgba(0,0,0,0.1)")
-    .style("display", "none");  // Commence caché, nous l'afficherons avec le bouton
-
-  // Ajouter des cases à cocher pour chaque colonne
-  var columnNames = Object.keys(ORIGINAL_DATASET[0]);
-  columnNames.forEach(function(columnName) {
-    var checkboxContainer = columnSelectionContainer.append("div")
-        .style("display", "flex")
-        .style("align-items", "center")
-        .style("margin-bottom", "5px");
-
-    checkboxContainer.append("input")
-        .attr("type", "checkbox")
-        .attr("id", columnName)
-        .attr("value", columnName)
-        .style("margin-right", "10px");
-
-    checkboxContainer.append("label")
-        .attr("for", columnName)
-        .text(columnName);
-  });
-
-  // Ajouter un bouton "Apply" dans le conteneur
-  columnSelectionContainer.append("button")
-    .text("Apply Column Selection")
-    .style("margin-top", "10px")
-    .style("padding", "5px 10px")
-    .style("cursor", "pointer")
-    .on("click", function() {
-        var selectedColumns = [];
-        
-        // Récupérer toutes les colonnes cochées
-        d3.selectAll("#column-selection-container input:checked").each(function() {
-            selectedColumns.push(d3.select(this).property("value"));
-        });
-
-        if (selectedColumns.length === 0) {
-            alert("Please select at least one column.");
-            return;
-        }
-
-        // Filtrer le dataset en fonction des colonnes sélectionnées
-        var filteredDataset = ORIGINAL_DATASET.map(function(row) {
-            var newRow = {};
-            selectedColumns.forEach(function(col) {
-                newRow[col] = row[col];
-            });
-            return newRow;
-        });
-
-        // Appeler updateUmap avec le dataset filtré
-        updateUmap(filteredDataset, nComponentsInput.property("value"), nNeighborsInput.property("value"));
-
-        // Cacher le menu après avoir appliqué la sélection
-        columnSelectionContainer.style("display", "none");
-    });
-
-  // Bouton pour afficher/masquer le menu
-  var toggleButton = d3.select("body").append("button")
-    .text("Show Column Selection")
-    .style("position", "absolute")
-    // .style("top", "10px")
-    .style("Left", "20px")
-    .style("padding", "10px")
-    .style("background-color", "#007bff")
-    .style("color", "white")
-    .style("border", "none")
-    .style("border-radius", "5px")
-    .style("cursor", "pointer")
-    .on("click", function() {
-      var currentDisplay = columnSelectionContainer.style("display");
-      if (currentDisplay === "none") {
-          columnSelectionContainer.style("display", "block");
-          toggleButton.text("Hide Column Selection");
-      } else {
-          columnSelectionContainer.style("display", "none");
-          toggleButton.text("Show Column Selection");
-      }
-    });
-
-  var labelAndButtonContainer = umapContainer.append("div")
-    .style("display", "flex")
-    .style("margin-left", "-20px")
-    .style("position", "relative");
-
-  labelAndButtonContainer.append("div")
-      .attr("class", "umap-text")
-      .style("top", "2px") 
-      .text("Categorical IQMs");
-
-  var inputContainer = umapContainer.append("div")
-    .style("display", "flex")
-    .style("margin-top", "10px") 
-    .style("margin-left", "-20px")
-    .style("position", "relative");
+	document.head.appendChild(style);
   
-    inputContainer.append("div")
-      .attr("class", "umap-text")
-      .style("top", "2px") 
-      .text("Custom Selection");
+	var umapControlContainer = d3.select("#umap-control-container").append("div");
 
-  var inputBox = inputContainer.append("input")
-      .attr("type", "text")
-      .attr("id", "customInputBox")
-      .style("width", "300px")
-      .style("height", "30px")  
-      .style("margin-left", "10px")  
-      .style("font-size", "13px");
+  	umapControlContainer.append("div")
+		.attr("class", "umap-text")
+		.text("UMAP Hyperparameters");
+  	umapControlContainer.append("div").attr("class", "horizontal-line");
 
-  var filteredData = dataset;
+  	var umapSvgContainer = d3.select("umap-svg-container").append("div");
+  	
+	var umapContainer = d3.select("#umap-selection-container").append("div");
 
-  var applyButton = inputContainer.append("button")
-      .text("Apply")
-      .style("margin-left", "10px")  
-      .style("height", "25px")  
-      .style("margin-top", "2px")
-      .style("font-size", "14px");
+  	var labelAndButtonContainer = umapContainer.append("div")
+    	.style("display", "flex")
+    	.style("margin-left", "-20px")
+    	.style("position", "relative");
 
-  applyButton.on("click", function() {
-    var inputValue = d3.select("#customInputBox").property("value");
-    console.log("Input:", inputValue);
+  	labelAndButtonContainer.append("div")
+    	.attr("class", "umap-text")
+    	.style("top", "2px")
+    	.text("Categorical IQMs");
 
-    if (!inputValue) {
-      console.error("Error: No input provided");
-      alert("Error: Please enter a value in the input field.");
-      return;
-    }
+  	var inputContainer = umapContainer.append("div")
+    	.style("display", "flex")
+    	.style("margin-top", "10px")
+    	.style("margin-left", "-20px")
+    	.style("position", "relative");
+  
+	inputContainer.append("div")
+		.attr("class", "umap-text")
+    	.style("top", "2px")
+    	.text("Custom Selection");
 
-    var parts = inputValue.split(/\b(and|or)\b/);
-    var expressions = [];
-    for (var i = 0; i < parts.length; i += 2) {
-      var value = parts[i].trim();
-      var operator = parts[i + 1];
+  	var inputBox = inputContainer.append("input")
+    	.attr("type", "text")
+    	.attr("id", "customInputBox")
+    	.style("width", "300px")
+    	.style("height", "30px")
+    	.style("margin-left", "10px")
+    	.style("font-size", "13px");
 
-      expressions.push({
-        value: value,
-        operator: operator ? operator.trim() : null
-      });
-    }
+	var filteredData = dataset;
 
-    filteredData = dataset;
+  	var applyButton = inputContainer.append("button")
+    	.text("Apply")
+    	.style("margin-left", "10px")
+    	.style("height", "25px")
+    	.style("margin-top", "2px")
+    	.style("font-size", "14px");
 
-    for (var i = 0; i < expressions.length; i++) {
-      var expression = expressions[i];
+  	applyButton.on("click", function () {
+    	var inputValue = d3.select("#customInputBox").property("value");
+    	console.log("Input:", inputValue);
 
-      var [field, condition, val] = expression.value.split(/(>=|<=|>|<|=)/);
-      field = field.trim();
-      condition = condition.trim();
-      val = val.trim();
+    	if (!inputValue) {
+      		console.error("Error: No input provided");
+      		alert("Error: Please enter a value in the input field.");
+      		return;
+    	}
 
-      val = isNaN(val) ? val.replace(/['"]+/g, '') : +val;
+    	var parts = inputValue.split(/\b(and|or)\b/);
+    	var expressions = [];
+    	for (var i = 0; i < parts.length; i += 2) {
+      		var value = parts[i].trim();
+      		var operator = parts[i + 1];
 
-      if (expression.operator === 'and' || !expression.operator) {
-        filteredData = filteredData.filter(row => {
-          switch (condition) {
-            case '=': return row[field] === val;
-            case '>': return row[field] > val;
-            case '<': return row[field] < val;
-            // More conditions can be added here...
-            default: return true;
-          }
-        });
-      } else if (expression.operator === 'or') {
-        console.warn("Handling 'or' logic is more complex and not implemented in this snippet");
-      }
+      		expressions.push({
+        		value: value,
+        		operator: operator ? operator.trim() : null,
+      		});
+    	}
 
-      // Check if filteredData is an empty array before using reduce
-      if (filteredData.length > 0) {
-        var max = filteredData.reduce((a, b) => a[field] > b[field] ? a : b)[field];
-        var min = filteredData.reduce((a, b) => a[field] < b[field] ? a : b)[field];
-      }
+    	filteredData = dataset;
 
-      if (filteredData.length < 2) {
-        console.error("Error: At least 2 data points are required for UMAP embeddings");
-        alert("Error: Please select at least 2 data points.");
-      return;
-    }
-  }
+    	for (var i = 0; i < expressions.length; i++) {
+      		var expression = expressions[i];
 
-    console.log("Filtered data:", filteredData);
-    updateUmap(
-      filteredData,
-      nComponentsInput.property("value"),
-      nNeighborsInput.property("value"),
-      distanceFnSelect.property("value"),
-      minDistInput.property("value"),
-      spreadInput.property("value")
-    );
-    setlegendHTML('')
-  });
+      		var [field, condition, val] = expression.value.split(/(>=|<=|>|<|=)/);
+      		field = field.trim();
+      		condition = condition.trim();
+      		val = val.trim();
 
-  var resetUMAPButton = inputContainer.append("button")
-      .text("Reset UMAP")
-      .style("margin-left", "10px")  
-      .style("height", "25px")  
-      .style("margin-top", "2px")
-      .style("font-size", "14px");
+      		val = isNaN(val) ? val.replace(/['"]+/g, "") : +val;
 
-  resetUMAPButton.on("click", function() {
-    d3.select("#customInputBox").property("value", "");
-    resetUmapView();
-    setlegendHTML('')
-  });
+      		if (expression.operator === "and" || !expression.operator) {
+        		filteredData = filteredData.filter((row) => {
+          			switch (condition) {
+            			case "=": return row[field] === val;
+            			case ">": return row[field] > val;
+        				case "<": return row[field] < val;
+            			// More conditions can be added here...
+            			default: return true;
+          			}
+        		});
+      		} else if (expression.operator === "or") {
+        		console.warn("Handling 'or' logic is more complex and not implemented in this snippet");
+      		}
 
-  var saveIQMsContainer = inputContainer.append("div")
-    .style("display", "flex")
-    .style("height", "25px")  
-    .style("margin-bottom", "10px")
-    .style("margin-left", "300px") 
-    .style("position", "relative");
+      		// Check if filteredData is an empty array before using reduce
+      		if (filteredData.length > 0) {
+        		var max = filteredData.reduce((a, b) => (a[field] > b[field] ? a : b))[field];
+        		var min = filteredData.reduce((a, b) => (a[field] < b[field] ? a : b))[field];
+      		}
 
-  var saveIQMsButton = saveIQMsContainer.append("button")
-      .text("Save IQMs")
-      .style("margin-left", "10px")  
-      .style("height", "25px")  
-      .style("margin-top", "2px")
-      .style("font-size", "14px");
+      		if (filteredData.length < 2) {
+    			console.error("Error: At least 2 data points are required for UMAP embeddings");
+        		alert("Error: Please select at least 2 data points.");
+        	return;
+      		}
+    	}
 
-  saveIQMsButton.on("click", function() {
-    var csvContent;
-    try {
-      csvContent = "data:text/csv;charset=utf-8," + d3.csvFormat(filteredData);
-    } catch (e) {
-      console.error("Error while saving IQMs:", e);
-      alert("Error while saving IQMs. Please check console for details.");
-      return;
-    }
-    var encodedUri = encodeURI(csvContent);
-    var link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "filtered_data.csv");
-    document.body.appendChild(link); // Required for FF
-    link.click(); // This will download the data file named "filtered_data.csv".
-  });
+    	console.log("Filtered data:", filteredData);
+    	updateUmap(
+      		filteredData,
+      		nComponentsInput.property("value"),
+      		nNeighborsInput.property("value"),
+      		distanceFnSelect.property("value"),
+      		minDistInput.property("value"),
+      		spreadInput.property("value")
+    	);
+    	setlegendHTML("");
+  	});
 
-  const nonNumericalColumns = Object.entries(columnInfo).filter(([key, value]) => value === 'non-numerical').map(([key]) => key);
+  	var resetUMAPButton = inputContainer.append("button")
+    	.text("Reset UMAP")
+    	.style("margin-left", "10px")
+    	.style("height", "25px")
+    	.style("margin-top", "2px")
+    	.style("font-size", "14px");
 
-  nonNumericalColumns.forEach(column => {
-    if (column === 'Image' || column === 'Name of Images') {
-      return;
-    }
+  	resetUMAPButton.on("click", function () {
+    	d3.select("#customInputBox").property("value", "");
+    	resetUmapView();
+    	setlegendHTML("");
+  	});
 
-    let columnClicked = false;
-    const columnBtn = labelAndButtonContainer.append("button")
-      .text(column)
-      .attr("id", `${column}-btn`)
-      .style("margin-left", "15px")
-      .on('click', function () {
-        columnClicked = !columnClicked;
-        if (columnClicked) {
-          updateLegend(dataset, column);
-        } else {
-          resetUmapView();
-          setlegendHTML('')
-        }
-      });
-  });
+  	var saveIQMsContainer = inputContainer.append("div")
+    	.style("display", "flex")
+    	.style("height", "25px")
+    	.style("margin-bottom", "10px")
+    	.style("margin-left", "300px")
+    	.style("position", "relative");
 
-  var nComponentsContainer = umapControlContainer.append("div")
-    .style("display", "flex") 
-    // .style("align-items", "left")
-    .style("width", "220px");
+  	var saveIQMsButton = saveIQMsContainer.append("button")
+    	.text("Save IQMs")
+    	.style("margin-left", "10px")
+    	.style("height", "25px")
+    	.style("margin-top", "2px")
+    	.style("font-size", "14px");
 
-  var nComponentsLabel = nComponentsContainer.append("label")
-    .attr("for", "nComponentsInput")
-    .text("nComponents")
-    .style("font-size", "15px");
+  	saveIQMsButton.on("click", function () {
+    	var csvContent;
+    	try {
+      		csvContent = "data:text/csv;charset=utf-8," + d3.csvFormat(filteredData);
+    	} catch (e) {
+      		console.error("Error while saving IQMs:", e);
+      		alert("Error while saving IQMs. Please check console for details.");
+      		return;
+   	 	}
+    	var encodedUri = encodeURI(csvContent);
+    	var link = document.createElement("a");
+    	link.setAttribute("href", encodedUri);
+    	link.setAttribute("download", "filtered_data.csv");
+    	document.body.appendChild(link); // Required for FF
+    	link.click(); // This will download the data file named "filtered_data.csv".
+  	});
 
-  var nComponentsInput = nComponentsContainer.append("input")
-    .attr("type", "number")
-    .attr("id", "nComponentsInput")
-    .attr("value", "2")
-    .style("width", "70px")
-    .style("margin-left", "13px")
-    .style("font-size", "14px");
+  	const nonNumericalColumns = Object.entries(columnInfo).filter(([key, value]) => value === "non-numerical").map(([key]) => key);
 
-  var nNeighborsContainer = umapControlContainer.append("div")
-    .style("display", "flex")
-    .style("align-items", "center")
-    .style("width", "100px");
+  	nonNumericalColumns.forEach((column) => {
+    	if (column === "Image" || column === "Name of Images" || column === "Tag" || column === "QC_Tag" || column === "Visual_QC") {
+      		return;
+    	}
 
-  var nNeighborsLabel = nNeighborsContainer.append("label")
-    .attr("for", "nNeighborsInput")
-    .text("nNeighbors")
-    .style("font-size", "15px");
+    	let columnClicked = false;
+    	const columnBtn = labelAndButtonContainer.append("button")
+      		.text(column)
+      		.attr("id", `${column}-btn`)
+      		.style("margin-left", "15px")
+      		.on("click", function () {
+        		columnClicked = !columnClicked;
+        		if (columnClicked) {
+          			updateLegend(dataset, column);
+        		} else {
+          			resetUmapView();
+          			setlegendHTML("");
+        		}
+      		});
+  	});
 
-  var nNeighborsInput = nNeighborsContainer.append("input")
-    .attr("type", "number")
-    .attr("id", "nNeighborsInput")
-    .attr("value", "15")
-    .style("width", "70px")
-    .style("margin-left", "28px")
-    .style("font-size", "14px");
+  	var nComponentsContainer = umapControlContainer.append("div")
+    	.style("display", "flex")
+    	// .style("align-items", "left")
+    	.style("width", "220px");
 
-  var distanceFnContainer = umapControlContainer.append("div")
-    .style("display", "flex")
-    .style("align-items", "center")
-    .style("width", "200px");
+	var nComponentsLabel = nComponentsContainer.append("label")
+    	.attr("for", "nComponentsInput")
+    	.text("nComponents")
+    	.style("font-size", "15px");
 
-  var distanceFnLabel = distanceFnContainer.append("label")
-    .attr("for", "distanceFnSelect")
-    .text("distanceFn")
-    .style("font-size", "15px");
+	var nComponentsInput = nComponentsContainer.append("input")
+    	.attr("type", "number")
+    	.attr("id", "nComponentsInput")
+    	.attr("value", "2")
+    	.style("width", "70px")
+    	.style("margin-left", "13px")
+    	.style("font-size", "14px");
 
-  var distanceFnSelect = distanceFnContainer.append("select")
-    .attr("id", "distanceFnSelect")
-    .style("width", "150px")
-    .style("margin-left", "32px")
-    .style("font-size", "14px");
+	var nNeighborsContainer = umapControlContainer.append("div")
+    	.style("display", "flex")
+    	.style("align-items", "center")
+    	.style("width", "100px");
 
-  const distanceFunctions = [
-    "euclidean", "manhattan", "chebyshev", "minkowski", "canberra",
-    "brayCurtis", "cosine", "correlation", "hamming", "jaccard", "dice",
-    "kulsinski", "rogersTanimoto", "russellRao", "sokalSneath", "sokalMichener", "yule"
-  ];
+	var nNeighborsLabel = nNeighborsContainer.append("label")
+    	.attr("for", "nNeighborsInput")
+    	.text("nNeighbors")
+    	.style("font-size", "15px");
 
-  distanceFunctions.forEach(function (distanceFn) {
-    distanceFnSelect.append("option")
-      .attr("value", distanceFn)
-      .text(distanceFn.charAt(0).toUpperCase() + distanceFn.slice(1))
-      .style("font-size", "14px");
-  });
+	var nNeighborsInput = nNeighborsContainer.append("input")
+    	.attr("type", "number")
+    	.attr("id", "nNeighborsInput")
+    	.attr("value", "15")
+    	.style("width", "70px")
+    	.style("margin-left", "28px")
+    	.style("font-size", "14px");
 
-  var minDistContainer = umapControlContainer.append("div")
-    .style("display", "flex")
-    .style("align-items", "center")
-    .style("width", "100px");
+	var distanceFnContainer = umapControlContainer.append("div")
+    	.style("display", "flex")
+    	.style("align-items", "center")
+    	.style("width", "200px");
 
-  var minDistLabel = minDistContainer.append("label")
-    .attr("for", "minDistInput")
-    .text("minDist")
-    .style("font-size", "15px");
+	var distanceFnLabel = distanceFnContainer.append("label")
+    	.attr("for", "distanceFnSelect")
+    	.text("distanceFn")
+    	.style("font-size", "15px");
 
-  var minDistInput = minDistContainer.append("input")
-    .attr("type", "number")
-    .attr("id", "minDistInput")
-    .attr("value", "0.1")
-    .style("width", "70px")
-    .style("margin-left", "52px")
-    .style("font-size", "14px");
+	var distanceFnSelect = distanceFnContainer
+    	.append("select")
+    	.attr("id", "distanceFnSelect")
+    	.style("width", "150px")
+    	.style("margin-left", "32px")
+    	.style("font-size", "14px");
 
-  var spreadContainer = umapControlContainer.append("div")
-    .style("display", "flex")
-    .style("align-items", "center")
-    .style("width", "100px");
+	const distanceFunctions = [
+    	"euclidean", "manhattan", "chebyshev", "minkowski", "canberra", 
+		"brayCurtis", "cosine", "correlation", "hamming", "jaccard", "dice",
+    	"kulsinski", "rogersTanimoto", "russellRao", "sokalSneath", "sokalMichener", "yule",
+  	];
 
-  var spreadLabel = spreadContainer.append("label")
-    .attr("for", "spreadInput")
-    .text("Spread")
-    .style("font-size", "15px");
+	distanceFunctions.forEach(function (distanceFn) {
+    	distanceFnSelect.append("option")
+      		.attr("value", distanceFn)
+      		.text(distanceFn.charAt(0).toUpperCase() + distanceFn.slice(1))
+      		.style("font-size", "14px");
+  	});
 
-  var spreadInput = spreadContainer.append("input")
-    .attr("type", "number")
-    .attr("id", "spreadInput")
-    .attr("value", "1")
-    .style("width", "70px")
-    .style("margin-left", "57px")
-    .style("font-size", "14px");
+  	var minDistContainer = umapControlContainer.append("div")
+    	.style("display", "flex")
+    	.style("align-items", "center")
+    	.style("width", "100px");
 
-  const umap = initUmap(dataset, nComponentsInput.property("value"), nNeighborsInput.property("value"));
-  // console.log(umap)
-  colors = Array(ORIGINAL_DATASET.length).fill('#00304e');
-  const containerWidth = umapSvgContainer.clientWidth;
-  const data = {
-    x: umap.uAxis,
-    y: umap.vAxis,
-    mode: 'markers',
-    type: 'scatter',
-    hoverinfo: 'text',
-    text: umap.participantNumbers,
-    marker: { size: 10, color: colors }
-  };
+	var minDistLabel = minDistContainer.append("label")
+    	.attr("for", "minDistInput")
+    	.text("minDist")
+    	.style("font-size", "15px");
 
-  const layout = {
-    height: containerWidth,
-    xaxis: {
-      autorange: true,
-      showgrid: false,
-      zeroline: false,
-      showline: false,
-      autotick: false,
-      showticklabels: false,
-    },
-    yaxis: {
-      autorange: true,
-      showgrid: false,
-      zeroline: false,
-      showline: false,
-      autotick: false,
-      showticklabels: false,
-    },
-    title: { text: '<b>UMAP Plot</b>', font: { family: 'Titillium Web', size: 18, color: 'black' } },
-  };
+	var minDistInput = minDistContainer.append("input")
+    	.attr("type", "number")
+    	.attr("id", "minDistInput")
+    	.attr("value", "0.1")
+    	.style("width", "70px")
+    	.style("margin-left", "52px")
+    	.style("font-size", "14px");
 
-  const config = { displayModeBar: true, scrollZoom: true, responsive: true };
-    
-  Plotly.newPlot('umap-svg-container', [data], layout, config);
+	var spreadContainer = umapControlContainer.append("div")
+    	.style("display", "flex")
+    	.style("align-items", "center")
+    	.style("width", "100px");
 
-  var selectedPoints = []
-  var myPlot = document.getElementById('umap-svg-container');
+	var spreadLabel = spreadContainer.append("label")
+    	.attr("for", "spreadInput")
+    	.text("Spread")
+    	.style("font-size", "15px");
 
-  // Listen for the selection event
-  myPlot.on('plotly_selected', function(eventData) {
-    selectedPoints = []; // Reset the selection
-    eventData.points.forEach(function(pt) {
-        selectedPoints.push(pt.text); // `pt.text` holds the name of the point
-    });
-    
-    // Update the box displaying selected point names
-    updateSelectedPointsBox(selectedPoints);
-  });
+	var spreadInput = spreadContainer.append("input")
+    	.attr("type", "number")
+    	.attr("id", "spreadInput")
+    	.attr("value", "1")
+    	.style("width", "70px")
+    	.style("margin-left", "57px")
+    	.style("font-size", "14px");
+	
+	var metricContainer = umapControlContainer.append("div")
+		.style("display", "flex")
+		.style("align-items", "center")
+		.style("width", "200px");
 
-  nComponentsInput.on("input", function() {
-    var selectedValue = d3.select(this).property("value");
-    updateUmap(dataset, selectedValue, nNeighborsInput.property("value"));
-  });
- 
-  nNeighborsInput.on("input", function() {
-    var selectedValue = d3.select(this).property("value");
-    updateUmap(dataset, nComponentsInput.property("value"), selectedValue);
-  });
+	var metricLabel = metricContainer.append("label")
+		.attr("for", "metricSelect")
+		.text("Metrics")
+		.style("font-size", "15px");
+	
+	var metricSelect = metricContainer.append("select")
+		.attr("id", "metricSelect")
+		.attr("multiple", true)		// Enable multi-select
+		.style("width", "150px")
+		.style("margin-left", "54px")
+		.style("font-size", "14px");
+	
+	Object.keys(ORIGINAL_DATASET[0]).forEach(function(columnName) {
+		if (columnName !== "Image" && columnName !== "Name of Images" && columnName !== "Tag" && columnName !== "QC_Tag" && columnName !== "Visual_QC") {
+			metricSelect.append("option")
+				.attr("value", columnName)
+				.text(columnName)
+				// .property("selected", true);
+		}
+	});
 
-  distanceFnSelect.on("change", function () {
-    var selectedValue = d3.select(this).property("value");
-    updateUmap(
-      dataset,
-      nComponentsInput.property("value"),
-      nNeighborsInput.property("value"),
-      selectedValue
-    );
-  });
 
-  minDistInput.on("input", function() {
-    var selectedValue = d3.select(this).property("value");
-    updateUmap(
-      dataset,
-      nComponentsInput.property("value"),
-      nNeighborsInput.property("value"),
-      distanceFnSelect.property("value"),
-      selectedValue
-    );
-  });
+  	const umap = initUmap(dataset, nComponentsInput.property("value"), nNeighborsInput.property("value"));
+  	// console.log(umap)
+  	colors = Array(ORIGINAL_DATASET.length).fill("#00304e");
+  	const containerWidth = umapSvgContainer.clientWidth;
+  	const data = {
+    	x: umap.uAxis,
+    	y: umap.vAxis,
+    	mode: "markers",
+    	type: "scatter",
+    	hoverinfo: "text",
+    	text: umap.participantNumbers,
+    	marker: { size: 10, color: colors },
+  	};
+  	
+	const layout = {
+    	height: containerWidth,
+    	xaxis: {
+      		autorange: true,
+      		showgrid: false,
+      		zeroline: false,
+      		showline: false,
+      		autotick: false,
+      		showticklabels: false,
+    	},
+    	yaxis: {
+      		autorange: true,
+      		showgrid: false,
+      		zeroline: false,
+      		showline: false,
+      		autotick: false,
+      		showticklabels: false,
+    	},
+    	title: {
+      		text: "<b>UMAP Plot</b>", font: { family: "Titillium Web", size: 18, color: "black" }
+		},
+  	};
+  	
+	const config = { displayModeBar: true, scrollZoom: true, responsive: true };
+  	
+	Plotly.newPlot("umap-svg-container", [data], layout, config);
 
-  spreadInput.on("input", function() {
-    var selectedValue = d3.select(this).property("value");
-    updateUmap(
-      dataset,
-      nComponentsInput.property("value"),
-      nNeighborsInput.property("value"),
-      distanceFnSelect.property("value"),
-      minDistInput.property("value"),
-      selectedValue
-    );
-  });
+	var selectedPoints = []
+	var myPlot = document.getElementById('umap-svg-container');
 
-  return { fourth: { marker: { color: colors, size: 10 } } };
+	// Selection event listener
+	myPlot.on('plotly_selected', function(eventData) {
+		selectedPoints = [];	// reset the selection
+		eventData.points.forEach(function(pt) {
+			selectedPoints.push(pt.text);	// pt.text holds the name of the point
+		});
+		updateSelectedPointsBox(selectedPoints);	// update the box displaying the points names
+	});
+
+  	nComponentsInput.on("input", function () {
+    	var selectedValue = d3.select(this).property("value");
+    	updateUmap(
+			filteredDataset, 
+			selectedValue, 
+			nNeighborsInput.property("value"));
+  	});
+
+  	nNeighborsInput.on("input", function () {
+    	var selectedValue = d3.select(this).property("value");
+    	updateUmap(
+			filteredDataset, 
+			nComponentsInput.property("value"), 
+			selectedValue);
+  	});
+
+  	distanceFnSelect.on("change", function () {
+    	var selectedValue = d3.select(this).property("value");
+    	updateUmap(
+      		filteredDataset,
+      		nComponentsInput.property("value"),
+      		nNeighborsInput.property("value"),
+      		selectedValue
+    	);
+  	});
+
+  	minDistInput.on("input", function () {
+    	var selectedValue = d3.select(this).property("value");
+    	updateUmap(
+      		filteredDataset,
+      		nComponentsInput.property("value"),
+      		nNeighborsInput.property("value"),
+      		distanceFnSelect.property("value"),
+      		selectedValue
+    	);
+  	});
+
+  	spreadInput.on("input", function () {
+    	var selectedValue = d3.select(this).property("value");
+    	updateUmap(
+      		filteredDataset,
+      		nComponentsInput.property("value"),
+      		nNeighborsInput.property("value"),
+      		distanceFnSelect.property("value"),
+      		minDistInput.property("value"),
+      		selectedValue
+    	);
+  	});
+
+	d3.select("#metricSelect").on("change", function() {
+		// get selected column names
+		selectedMetrics = Array.from(this.selectedOptions).map(option => option.value);
+		if (selectedMetrics.length === 0) {
+			alert("Please select at least one column");
+			return;
+		}
+		// filter dataset to only include the selected columns
+		filteredDataset = ORIGINAL_DATASET.map(function(row) {
+			return selectedMetrics.map(col => row[col]);
+		});
+
+		// Log the filtered dataset to see the values used by the UMAP
+		console.log("Filtered dataset for UMAP", filteredDataset);
+
+		// re run UMAP with the updated column selection
+		updateUmap(
+			filteredDataset,
+			nComponentsInput.property("value"),
+			nNeighborsInput.property("value"),
+			distanceFnSelect.property("value"),
+			minDistInput.property("value")
+		);
+	});
+
+  	return { fourth: { marker: { color: colors, size: 10 } } };
 
 }
 
 
-function initUmap(dataset, nComponents = 2, nNeighbors = 15, distanceFn = 'euclidean', minDist = 0.1, spread = 1, seed) {     // for reproducibility : set seed value
-  Math.seedrandom(seed);
-  const distanceFunction = UMAP[distanceFn] || UMAP.euclidean;
-  const umap = new UMAP({
-    nComponents: nComponents,
-    distanceFn: distanceFunction,
-    nNeighbors: 6,
-    // nNeighbors: Math.min(dataset.length - 1, nNeighbors),
-    minDist: minDist,
-    spread: spread
-  });
-  const numericalDataset = dataset.map(obj => {
-    const newObj = {};
-    for (const prop in obj) {
-      newObj[prop] = !isNaN(parseFloat(obj[prop])) ? parseFloat(obj[prop]) : obj[prop];
-    }
-    return newObj;
-  });
-  // const umapValues = numericalDataset.map(d => Object.values(d));
-  // const umapVariables = Object.keys(numericalDataset[0]).filter(prop => typeof numericalDataset[0][prop] === 'number');
+function initUmap(dataset, nComponents = 2, nNeighbors = 15, distanceFn = "euclidean", minDist = 0.1, spread = 1, seed) {	// for reproducibility, set seed value
+  	
+	Math.seedrandom(seed);
+  	
+	const distanceFunction = UMAP[distanceFn] || UMAP.euclidean;
+  	
+	const umap = new UMAP({
+    	nComponents: nComponents,
+    	distanceFn: distanceFunction,
+    	nNeighbors: nNeighbors,
+    	// nNeighbors: Math.min(dataset.length - 1, nNeighbors),
+    	minDist: minDist,
+    	spread: spread,
+  	});
+  	
+	const numericalDataset = dataset.map((obj) => {
+    	const newObj = {};
+    	for (const prop in obj) {
+      		newObj[prop] = !isNaN(parseFloat(obj[prop])) ? parseFloat(obj[prop]) : obj[prop];
+    	}
+    	return newObj;
+  	});
+  	// const umapValues = numericalDataset.map(d => Object.values(d));
+  	// const umapVariables = Object.keys(numericalDataset[0]).filter(prop => typeof numericalDataset[0][prop] === 'number');
 
-  // Filter out non-numeric properties from the dataset
-  const numericProperties = Object.keys(numericalDataset[0]).filter(prop => {
-    // Check if the first data point's property value is a number
-    return typeof numericalDataset[0][prop] === 'number';
-  });
+  	// Filter out non-numeric properties from the dataset
+  	const numericProperties = Object.keys(numericalDataset[0]).filter((prop) => {
+    	// Check if the first data point's property value is a number
+    	return typeof numericalDataset[0][prop] === "number";
+  	});
 
-  // Extract only the numeric values from the dataset
-  const umapValues = numericalDataset.map(d => {
-    const numericData = {};
-    numericProperties.forEach(prop => {
-      numericData[prop] = d[prop];
-    });
-    return Object.values(numericData);
-  });
+  	// Extract only the numeric values from the dataset
+  	const umapValues = numericalDataset.map((d) => {
+    	const numericData = {};
+    	numericProperties.forEach((prop) => {
+      		numericData[prop] = d[prop];
+    	});
+    	return Object.values(numericData);
+  	});
 
-  // Now umapValues contains only numeric values
-  // console.log('umapValues:', umapValues);
-  
-  // console.log('hi') console.log(umapValues)
-  const embedding = umap.fit(umapValues)
-  // console.log('hio')
-  const uAxis = embedding.map(d => d[0]);
-  const vAxis = embedding.map(d => d[1]);
-  const participantNumbers = dataset.map(d => d['Image']);
-  return { uAxis, vAxis, participantNumbers, nNeighbors};
+  	// Now umapValues contains only numeric values
+  	// console.log('umapValues:', umapValues);
+
+  	// console.log('hi') console.log(umapValues)
+  	const embedding = umap.fit(umapValues);
+  	// console.log('hio')
+  	const uAxis = embedding.map((d) => d[0]);
+  	const vAxis = embedding.map((d) => d[1]);
+  	const participantNumbers = dataset.map((d) => d["Image"]);
+  	return { uAxis, vAxis, participantNumbers, nNeighbors };
+
 }
 
 
 function updateLegend(dataset, colorColumn) {
-  const colorValues = dataset.map(obj => obj[colorColumn]);
-  const uniqueColors = [...new Set(colorValues)];
-  const colorMap = {};
-  uniqueColors.forEach((color, index) => {
-    colorMap[color] = index;
-  });
+  	
+	const colorValues = dataset.map((obj) => obj[colorColumn]);
+  	const uniqueColors = [...new Set(colorValues)];
+  	const colorMap = {};
+  	uniqueColors.forEach((color, index) => {
+    	colorMap[color] = index;
+  	});
 
-  const legendItems = uniqueColors.map(color => {
-  const index = colorMap[color];
-  const markerStyle = `background-color: hsl(${(index * 360 / uniqueColors.length)}, 100%, 50%);`;
-  return `<div style="display: flex; align-items: center; margin: 2px;">
-            <div style="${markerStyle} width: 12px; height: 12px; border-radius: 50%;"></div>
-            <button style="margin-left: 6px;" onclick="updatePlotByColor('${colorColumn}', '${color}')">${color}</button>
-          </div>`;
-  });
+  	const legendItems = uniqueColors.map((color) => {
+    	const index = colorMap[color];
+    	const markerStyle = `background-color: hsl(${(index * 360) / uniqueColors.length}, 100%, 50%);`;
+    	return `<div style="display: flex; align-items: center; margin: 2px;">
+					<div style="${markerStyle} width: 12px; height: 12px; border-radius: 50%;"></div>
+					<button style="margin-left: 6px;" onclick="updatePlotByColor('${colorColumn}', '${color}')">${color}</button>
+          		</div>`;
+  	});
 
-  const legendHtml = `<div style="display: flex; flex-direction: column;">
-                      <div style="font-weight: bold; text-align: center; font-size: 18px;">${colorColumn}</div>
-                      <hr style="width: 90%; height: 2px; margin: 0 auto 5px auto; border: 0; background-color: black;">
-                      <div style="display: flex; flex-direction: column; justify-content: center;">
-                        ${legendItems.join('')}
-                      </div>
-                    </div>`;              
+  	const legendHtml = `<div style="display: flex; flex-direction: column;">
+                      		<div style="font-weight: bold; text-align: center; font-size: 18px;">${colorColumn}</div>
+                      		<hr style="width: 90%; height: 2px; margin: 0 auto 5px auto; border: 0; background-color: black;">
+                      		<div style="display: flex; flex-direction: column; justify-content: center;">
+                        		${legendItems.join("")}
+                      		</div>
+                    	</div>`;
 
-  const legendContainer = document.getElementById('umap-legend-container');
-  setlegendHTML(legendHtml)
-  const colors = colorValues.map(color => `hsl(${(colorMap[color] * 360 / uniqueColors.length)}, 100%, 50%)`);
-  const update = { marker: { color: colors, size: 10 } };
+  	const legendContainer = document.getElementById("umap-legend-container");
+  	setlegendHTML(legendHtml);
+  	const colors = colorValues.map((color) => `hsl(${(colorMap[color] * 360) / uniqueColors.length}, 100%, 50%)`);
+	const update = { marker: { color: colors, size: 10 } };
 
-  const layout = {
-        title: { text: `<b>UMAP Plot for the ${colorColumn} IQM</b>`, font: { family: 'Titillium Web', size: 18, color: 'black' } },
-  };
+	const layout = {
+    	title: { text: `<b>UMAP Plot for the ${colorColumn} IQM</b>`, font: { family: "Titillium Web", size: 18, color: "black" } },
+  	};
 
+  	Plotly.restyle("umap-svg-container", update);
+  	Plotly.relayout("umap-svg-container", layout);
 
-  Plotly.restyle('umap-svg-container', update);
-  Plotly.relayout('umap-svg-container', layout);
+}
+
+function resetUmapView() {
+
+	// const seed = 42; 	// for reproducibility : set seed value
+  	const updatedDataset = ORIGINAL_DATASET;
+  	const umap = initUmap(updatedDataset);
+  	// const umap = initUmap(updatedDataset, nComponents = 2, nNeighbors = 15, distanceFn = 'euclidean', minDist = 0.1, spread = 1);
+  	const colors = Array(updatedDataset.length).fill("#00304e");
+
+  	const data = {
+    	x: umap.uAxis,
+    	y: umap.vAxis,
+    	mode: "markers",
+    	type: "scatter",
+    	hoverinfo: "text",
+    	text: umap.participantNumbers,
+    	marker: { size: 10, color: colors },
+  	};
+
+  	const update = {
+    	x: [data.x],
+    	y: [data.y],
+    	"marker.color": [data.marker.color],
+    	"marker.size": [data.marker.size],
+  	};
+
+	Plotly.restyle("umap-svg-container", update);
+
+  	const layout = {
+    	title: { text: `<b>UMAP Plot</b>`, font: { family: "Titillium Web", size: 18, color: "black" } },
+  	};
+
+  	Plotly.relayout("umap-svg-container", layout);
+
 }
 
 
-function resetUmapView() {
-    // const seed = 42;   // for reproducibility : set seed value
-    const updatedDataset = ORIGINAL_DATASET;
-    const umap = initUmap(updatedDataset);
-    // const umap = initUmap(updatedDataset, nComponents = 2, nNeighbors = 15, distanceFn = 'euclidean', minDist = 0.1, spread = 1, seed);
-    const colors = Array(updatedDataset.length).fill('#00304e');
-
-    const data = {
-      x: umap.uAxis,
-      y: umap.vAxis,
-      mode: 'markers',
-      type: 'scatter',
-      hoverinfo: 'text',
-      text: umap.participantNumbers,
-      marker: { size: 10, color: colors }
-    };
-
-    const update = {
-      x: [data.x],
-      y: [data.y],
-      'marker.color': [data.marker.color],
-      'marker.size': [data.marker.size]
-    };
-
-    Plotly.restyle('umap-svg-container', update);
-
-    const layout = {
-        title: { text: `<b>UMAP Plot</b>`, font: { family: 'Titillium Web', size: 18, color: 'black' } },
-    };
-
-    Plotly.relayout('umap-svg-container', layout);
-  }
-
-
 function setlegendHTML(legendHtml) {
-  const legendContainer = document.getElementById('umap-legend-container');
-  if (legendContainer) {
-    legendContainer.innerHTML = legendHtml;
-  }
+	const legendContainer = document.getElementById("umap-legend-container");
+  	if (legendContainer) {
+    	legendContainer.innerHTML = legendHtml;
+  	}
 }
 
 
 function updatePlotByColor(colorColumn, color) {
-  const colorValues = ORIGINAL_DATASET.map(obj => obj[colorColumn]);
-  const uniqueColors = [...new Set(colorValues)];
-  const colorMap = {};
-  uniqueColors.forEach((color, index) => {
-    colorMap[color] = index;
-  });
-  const colors = colorValues.map(c => c === color ? `hsl(${(colorMap[color] * 360 / uniqueColors.length)}, 100%, 50%)` : 'rgba(0,0,0,0)');
-  const update = { marker: { color: colors, size: 10 } };
+  	
+	const colorValues = ORIGINAL_DATASET.map((obj) => obj[colorColumn]);
+  	const uniqueColors = [...new Set(colorValues)];
+  	const colorMap = {};
+  	uniqueColors.forEach((color, index) => {
+    	colorMap[color] = index;
+  	});
+  	const colors = colorValues.map((c) => c === color ? `hsl(${(colorMap[color] * 360) / uniqueColors.length}, 100%, 50%)` : "rgba(0,0,0,0)");
+  	const update = { marker: { color: colors, size: 10 } };
 
-  const layout = {
-    title: { text: `<b>UMAP Plot for the ${color} class of ${colorColumn} metric</b>`, font: { family: 'Titillium Web', size: 18, color: 'black' } },
-  };
+  	const layout = {
+    	title: {text: `<b>UMAP Plot for the ${color} class of ${colorColumn} metric</b>`, font: { family: "Titillium Web", size: 18, color: "black" } },
+  	};
 
-  Plotly.restyle('umap-svg-container', update);
-  Plotly.relayout('umap-svg-container', layout);
+  	Plotly.restyle("umap-svg-container", update);
+  	Plotly.relayout("umap-svg-container", layout);
+
 }
 
 
-function updateUmap(dataset, nComponents, nNeighbors, distanceFn, minDist, spread, colorColumn = 'MFR') {
-  const legendContainer = document.getElementById('umap-legend-container');
-  // const seed = 42;
-  const umap = initUmap(dataset, nComponents, nNeighbors, distanceFn, minDist, spread);
-  const update = {
-    x: [umap.uAxis],
-    y: [umap.vAxis]
-  };
+function updateUmap(dataset, nComponents, nNeighbors, distanceFn, minDist, spread, colorColumn = "MFR") {
+  
+	const legendContainer = document.getElementById("umap-legend-container");
+  	// const seed = 42
+	const umap = initUmap(dataset, nComponents, nNeighbors, distanceFn, minDist, spread);
+  	const update = {
+    	x: [umap.uAxis],
+    	y: [umap.vAxis],
+  	};
 
-  const layout = {
-    title: { text: `<b>UMAP Plot</b>`, font: { family: 'Titillium Web', size: 18, color: 'black' } },
-  };
+  	const layout = {
+    	title: {text: `<b>UMAP Plot</b>`, font: { family: "Titillium Web", size: 18, color: "black" } },
+  	};
 
-  if (legendContainer.innerHTML.trim() !== '') {
-    updateLegend(dataset, colorColumn);
-  } else {
-    update.marker = { color: Array(ORIGINAL_DATASET.length).fill('#00304e'), size: 10 };
-  }
+  	if (legendContainer.innerHTML.trim() !== "") {
+    	updateLegend(dataset, colorColumn);
+  	} else {
+    	update.marker = { color: Array(ORIGINAL_DATASET.length).fill("#00304e"), size: 10 };
+  	}
 
-  Plotly.update('umap-svg-container', update);
-  Plotly.relayout('umap-svg-container', layout);
+  	Plotly.update("umap-svg-container", update);
+  	Plotly.relayout("umap-svg-container", layout);
 
-  if (selectedCaseName !== null) {
-        enter_select_umap_view(selectedCaseName);
-    }
+  	if (selectedCaseName !== null) {
+    	enter_select_umap_view(selectedCaseName);
+  	}
+
 }
 
 
 function updateSelectedPointsBox(points) {
-  var selectedPointsContainer = document.getElementById('selected-points-container');
-  if (!selectedPointsContainer) {
-      selectedPointsContainer = document.createElement('div');
-      selectedPointsContainer.id = 'selected-points-container';
-      selectedPointsContainer.style.border = '1px solid black';
-      selectedPointsContainer.style.padding = '30px';
-      selectedPointsContainer.style.marginTop = '30px';
-      selectedPointsContainer.style.width = '300px'; // Set a width for better readability
-      document.body.appendChild(selectedPointsContainer);
-  }
+	
+	var selectedPointsContainer = document.getElementById('selected-points-container');
+	
+	if (!selectedPointsContainer) {
+		selectedPointsContainer = document.createElement('div');
+		selectedPointsContainer.id = 'selected-points-container';
+		selectedPointsContainer.style.border = '10px solid black';
+		selectedPointsContainer.style.padding = '30px';
+		selectedPointsContainer.style.marginTop = '30px';
+		selectedPointsContainer.style.marginLeft = '30px'
+		selectedPointsContainer.style.width = '100px'; // Set a width for better readability
+		document.body.appendChild(selectedPointsContainer);
+	}
+  
+	// Display first 5 points and create a toggle for the rest
+	var displayPoints = points.slice(0, 5).join('<br>');
+	var remainingPoints = points.length > 5 ? `<br>...and ${points.length - 5} more` : '';
+  
+	selectedPointsContainer.innerHTML = `
+		<b>Selected Points:</b><br>
+		<div id="collapsedPoints">${displayPoints}${remainingPoints}</div>
+		<button id="toggleList">Show ${points.length > 5 ? 'More' : 'Less'}</button>
+	`;
+  
+	document.getElementById('toggleList').addEventListener('click', function () {
+		var isExpanded = document.getElementById('toggleList').innerText.includes('More');
+		if (isExpanded) {
+			document.getElementById('collapsedPoints').innerHTML = points.join('<br>');
+			document.getElementById('toggleList').innerText = 'Show Less';
+		} else {
+			document.getElementById('collapsedPoints').innerHTML = displayPoints + remainingPoints;
+			document.getElementById('toggleList').innerText = 'Show More';
+		}
+	});
 
-  // Display first 10 points and create a toggle for the rest
-  var displayPoints = points.slice(0, 5).join('<br>');
-  var remainingPoints = points.length > 5 ? `<br>...and ${points.length - 5} more` : '';
+	// Add Export Selected Points button
+    var exportSelectedPointsButton = document.createElement("button");
+    exportSelectedPointsButton.innerText = "Export Selected Points";
+    exportSelectedPointsButton.style.marginTop = "10px";
+    selectedPointsContainer.appendChild(exportSelectedPointsButton);
 
-  selectedPointsContainer.innerHTML = `
-      <b>Selected Points:</b><br>
-      <div id="collapsedPoints">${displayPoints}${remainingPoints}</div>
-      <button id="toggleList">Show ${points.length > 5 ? 'More' : 'Less'}</button>
-  `;
+    // Add an event listener to the export button
+    exportSelectedPointsButton.addEventListener("click", function () {
+        var tsv = exportSelectedPoints(points);
+		var dataStr = "data:text/tsv;charset=utf-8," + encodeURIComponent(tsv);
+		var downloadAnchorNode = document.createElement("a");
+		downloadAnchorNode.setAttribute("href", dataStr);
+		downloadAnchorNode.setAttribute("download", "selected_points.tsv");
+		document.body.appendChild(downloadAnchorNode); // nécesaire pour Firefox
+		downloadAnchorNode.click();
+		downloadAnchorNode.remove();
 
-  document.getElementById('toggleList').addEventListener('click', function () {
-      var isExpanded = document.getElementById('toggleList').innerText.includes('More');
-      if (isExpanded) {
-          document.getElementById('collapsedPoints').innerHTML = points.join('<br>');
-          document.getElementById('toggleList').innerText = 'Show Less';
-      } else {
-          document.getElementById('collapsedPoints').innerHTML = displayPoints + remainingPoints;
-          document.getElementById('toggleList').innerText = 'Show More';
-      }
-  });
+    });
+
+}
+
+
+function exportSelectedPoints(points) {
+
+	if (points.length === 0) {
+		alert("No points selected to export.");
+		return;
+	}
+
+	// Get column names from original dataset
+	const columnNames = Object.keys(ORIGINAL_DATASET[0]);
+
+	// Filter original dataset to include only selected points
+	const filteredData = ORIGINAL_DATASET.filter(row => points.includes(row['Image']));
+
+	// Create CSV including the headers
+	let csvContent = columnNames.join("\t") + "\n" + filteredData.map(row => columnNames.map(col => row[col]).join("\t")).join("\n");
+
+	return FILE_HEADER + csvContent
+
 }
 
 
 function handleExpression(expression) {
-  // Parse the expression and do something with it
-  var parts = expression.split(' and ');
-  for (var i = 0; i < parts.length; i++) {
-    var subParts = parts[i].split(' or ');
-    for (var j = 0; j < subParts.length; j++) {
-      console.log(subParts[j]);
-    }
-  }
+  	// Parse the expression and do something with it
+  	var parts = expression.split(" and ");
+  	for (var i = 0; i < parts.length; i++) {
+    	var subParts = parts[i].split(" or ");
+    	for (var j = 0; j < subParts.length; j++) {
+      		console.log(subParts[j]);
+    	}
+  	}
 }
 
 
-function enter_select_umap_view (case_name) {
-  selectedCaseName = case_name;
-    // exit_select_umap_view();
+function enter_select_umap_view(case_name) {
+  	selectedCaseName = case_name;
+  	// exit_select_umap_view();
 
-   var myPlott = document.getElementById('umap-svg-container');
-    var datagraph = myPlott.data;
+  	var myPlott = document.getElementById("umap-svg-container");
+  	var datagraph = myPlott.data;
 
-    for (var j = 0; j < datagraph[0].text.length; j ++) {
-        if (datagraph[0].text[j] == case_name) {
-                var test_value = 1;
-                    colors3 = Array(ORIGINAL_DATASET.length).fill('#00304e');
-                    colors3[j] = '#ffc000';
-                    var update3 = {'marker':{color: colors3, size:10}};
-                    Plotly.restyle('umap-svg-container', update3);
-            } else {
-                var test_value = 0;
-            }
-    };
+  	for (var j = 0; j < datagraph[0].text.length; j++) {
+    	if (datagraph[0].text[j] == case_name) {
+      		var test_value = 1;
+      			colors3 = Array(ORIGINAL_DATASET.length).fill("#00304e");
+      			colors3[j] = "#ffc000";
+      			var update3 = { marker: { color: colors3, size: 10 } };
+      			Plotly.restyle("umap-svg-container", update3);
+    	} else {
+      		var test_value = 0;
+    	}
+  	};
 }

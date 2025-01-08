@@ -78,6 +78,10 @@ var DATA_TABLE_CONFIG = {
 			action: function(e, dt, node, config) {
 				exit_select_mode();
 			}
+		},
+		{
+			extend: 'colvis',
+			text: 'Columns',
 		}
 	]
 };

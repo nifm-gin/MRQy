@@ -213,12 +213,12 @@ def saveThumbnails_dicom(v, output):
     if save_masks_flag!='False':
         ffolder = output + '_foreground_masks'
         # Create a directory for foreground masks
-        os.makedirs(ffolder + os.sep + v[1]['ID'])
+        os.makedirs(ffolder + os.sep + v[1]['ID'], exist_ok=True)
     elif save_masks_flag=='False':
         ffolder = output
     # Create a directory for images
     # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
-    os.makedirs(output + os.sep + v[1]['ID'])
+    os.makedirs(output + os.sep + v[1]['ID'], exist_ok=True)
     # Save images as thumbnails
     for i in range(0, len(v[0]), sample_size):
         # Le chemin + nom qu'ont les images.png dans leur dossier respectif
@@ -352,7 +352,7 @@ def volume_nifti_masks(mask_path):
 def saveThumbnails_nondicom(v, output, masks):
     # Create a directory for images
     # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
-    os.makedirs(output + os.sep + v[1])
+    os.makedirs(output + os.sep + v[1], exist_ok=True)
     # Save images as thumbnails, with the mask contours
     for i in range(len(v[0])):
         # Extract the image and the corresponding mask slice
@@ -444,12 +444,12 @@ def saveThumbnails_mat(v, output):
     if save_masks_flag!='False':
         ffolder = output + '_foreground_masks'
         # Create a directory for foreground masks
-        os.makedirs(ffolder + os.sep + v[1]['ID'])
+        os.makedirs(ffolder + os.sep + v[1]['ID'], exist_ok=True)
     elif save_masks_flag=='False':
         ffolder = output
     # Create a directory for images 
     # Dans le dossier "Data", il va y avoir la création des dossiers contenant les images au format png
-    os.makedirs(output + os.sep + v[1]['ID'])
+    os.makedirs(output + os.sep + v[1]['ID'], exist_ok=True)
     # Save image as thumbnails
     for i in range(np.shape(v[0])[2]):
         # Le chemin + nom qu'ont les images.png dans leur dossier respectif
@@ -868,20 +868,44 @@ if __name__ == '__main__':
     for i in range(len(names)):
         if dicom_flag:
             for j in range(len(dicom_spil)):
-                v = volume_dicom(dicom_spil[j], names[j])
-                folder_foregrounds = saveThumbnails_dicom(v, fname_outdir)
-                s = BaseVolume_dicom(fname_outdir, v, j+1, folder_foregrounds, sample_size, ch_flag)
-                worker_callback(s, fname_outdir)
+                try:
+                    # Define the output directory for the processed DICOM image
+                    output_dir = os.path.join(fname_outdir, names[j])
+                    # Check if the directory exists (indicating the image has already been processed)
+                    if os.path.exists(output_dir):
+                        print(f"Skipping DICOM file {names[j]}: Already processed.")
+                        continue  # Skip to the next image
+                    # Process DICOM image
+                    v = volume_dicom(dicom_spil[j], names[j])
+                    folder_foregrounds = saveThumbnails_dicom(v, fname_outdir)
+                    s = BaseVolume_dicom(fname_outdir, v, j+1, folder_foregrounds, sample_size, ch_flag)
+                    worker_callback(s, fname_outdir)
+                except Exception as e:
+                    print(f"Error processing DICOM file {names[j]}: {e}")
             dicom_flag = False
             
         if nondicom_flag:
             for l,k in enumerate(nondicom_spli):
-                mask = brain_extraction(k, output_masks)
-                v = volume_nifti(k, nondicom_names[l])
-                volume_masks = volume_nifti_masks(mask)
-                saveThumbnails_nondicom(v, fname_outdir, volume_masks[0])
-                s = BaseVolume_nondicom(fname_outdir, v, l+1, k, sample_size, ch_flag)
-                worker_callback(s,fname_outdir)
+                try:
+                    # Define the output directory for the processed non-DICOM image
+                    output_dir = os.path.join(fname_outdir, nondicom_names[l])
+                    # Check if the directory exists (indicating the image has already been processed)
+                    if os.path.exists(output_dir):
+                        print(f"Skipping non-DICOM file {nondicom_names[l]}: Already processed.")
+                        continue  # Skip to the next image
+                    # Process the non-DICOM image
+                    mask = brain_extraction(k, output_masks)
+                    if mask is None:  # Skip if brain extraction fails
+                        print(f"Skipping file {k} due to failed brain extraction.")
+                        continue
+                    v = volume_nifti(k, nondicom_names[l])
+                    volume_masks = volume_nifti_masks(mask)
+                    saveThumbnails_nondicom(v, fname_outdir, volume_masks[0])
+                    s = BaseVolume_nondicom(fname_outdir, v, l + 1, k, sample_size, ch_flag)
+                    worker_callback(s, fname_outdir)
+                except Exception as e:
+                    print(f"Error processing non-DICOM file {nondicom_names[l]}: {e}")
+                    continue
             nondicom_flag = False
         
         if mat_flag:

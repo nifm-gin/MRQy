@@ -193,7 +193,7 @@ tr.selected td {
 /* Styles for the UMAP view */
 #umap-view {
 	display: flex;
-	height: 400px;
+	height: 600px;
 	overflow: hidden;
 	/* border: 10px solid yellow;*/
 	width: 100%;

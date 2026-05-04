@@ -1,3 +1,6 @@
+window.imageRoot = "";
+
+
 function data_loading() {
 	
 	var $this = $(this);
@@ -22,9 +25,10 @@ function data_loading() {
 
         var absdirRe = /#outdir:?\s*([^\s]*)\s*\n/;
         var abs_outdir = absdirRe.exec(file_text)[1];
-        var reldirRe = /([^\\\/]*)$/;
-        var rel_outdir = reldirRe.exec(abs_outdir)[1];
-        DATA_PATH = DATA_PATH + rel_outdir + "/";
+        //var imageRoot = abs_outdir + "/";
+	//console.log("imageRoot utilisé :", imageRoot);
+	window.imageRoot = abs_outdir + "/";
+	console.log("imageRoot utilisé :", window.imageRoot);
 
 		var scantypeRe = /#scantype:?\s*([^\s]*)\s*\n/;
 		var scantypeMatch = scantypeRe.exec(file_text);
@@ -78,10 +82,10 @@ function data_loading() {
 		    // delete row["Name of Images"];
 		    return row;
 		});
-
+		
 		$("#dataset-tag").css("display", "inline")
-						 .text("Dataset: " + rel_outdir + ",  N= " + ORIGINAL_DATASET.length + " ");
-
+                 .text("Data folder: " + abs_outdir + ",  N= " + ORIGINAL_DATASET.length + " ");
+		
 		// $("#dataset-tag").css("display", "inline")
 		// 				 .text("Data: " + cur_file.name + " | N= " + ORIGINAL_DATASET.length + ", " + rel_outdir);
 

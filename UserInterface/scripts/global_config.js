@@ -4,7 +4,10 @@
 
 /***************** SYSTEM CONFIG **************/
 /***** absolute path - for relative path, write ./Data/ *****/
-var DATA_PATH = "/data_hdd/RADIO-AIDE/QualityControlMRQY/Data_Processed/";			
+/* var DATA_PATH = "/data_hdd/RADIO-AIDE/QualityControlMRQY/Data_Processed/"; */
+/* var DATA_PATH = "/data_hdd/RadioAide_NEW/02_quality_control/data/Data_Processed/"; */
+var DATA_PATH = "";
+		
 /***** here you should write the path where you want to send the results of the MRQy analysis *****/  
 
 var OPEN_WITH_TABLE = true,
@@ -36,4 +39,14 @@ var DEFAULT_VIS_TYPE = "parallel_coordinate";
 // full set of possible image format identifiers. 
 var DEFAULT_IMAGE_EXTENSIONS = [
     "_thumb.png"
+];
+
+/****************** TAG DETECTION ****************/
+// Known medical imaging tags. The system picks the longest one that matches in the image name.
+// Add any tag specific to your dataset here
+var KNOWN_TAGS = [
+    // BIDS Standard tags
+	"T1w", "T2w", "FLAIR", "bold", "dwi", "perf",
+	// RadioAIDE-specific tags
+	"T1", "T1gd", "T2", "FLAIR"
 ];

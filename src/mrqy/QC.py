@@ -763,7 +763,8 @@ if __name__ == '__main__':
     # Add the start time information to the headers list
     headers.append(f"start_time:\t{datetime.datetime.now()}")
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='')    # Path for the output folder name
+    parser = argparse.ArgumentParser(description='')    
+    # Path for the output folder name
     parser.add_argument('output_folder_name',
                         help = "the subfolder name on the '...\\UserInterface\\Data\\output_folder_name' directory.",
                         type=str)
@@ -819,8 +820,12 @@ if __name__ == '__main__':
     
     # Les résultats vont dans le dossier UserInterface (dans MRQy)
     print_folder_note = os.getcwd() + os.sep + 'UserInterface'
+    
     # Un dossier "Data" dans UserInterface va contenir les résultats de l'analyse des images
-    fname_outdir = print_folder_note + os.sep + 'Data' + os.sep + args.output_folder_name
+    # fname_outdir = print_folder_note + os.sep + 'Data' + os.sep + args.output_folder_name
+    
+    # version pour avoir une liberté de choix dans le chemin de sortie des résultats
+    fname_outdir = args.output_folder_name
     
     overwrite_flag = "w"        
     headers.append(f"outdir:\t{os.path.realpath(fname_outdir)}")

@@ -39,6 +39,7 @@ var DATA_TABLE_CONFIG = {
 	// colReorder: true,
 	// select: true,
 	dom: '<"table-content col-11"t><"table-control col-1"B>', //Blfrip
+	keys: true,
 	buttons: [
 		{
 			extend: 'copy',

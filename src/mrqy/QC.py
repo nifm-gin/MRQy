@@ -27,7 +27,8 @@ To function, the input folder must contain NIFTI images (.nii.gz). It doesn't fu
 
 import argparse                                             # Handles command line arguments
 import datetime                                             # Manipulate time values
-from itertools import accumulate                            # Return series of accumulated sums
+from itertools import accumulate
+import shutil                            # Return series of accumulated sums
 import matplotlib.cm as cm                                  # Interactive colormaps
 import matplotlib.pyplot as plt                             # Interactive plots
 from medpy.io import load                                   # For NIFTI image processing
@@ -297,12 +298,13 @@ def brain_extraction(scan, output_masks):
     # subprocess.run(['bet', scan, output_mask, '-f', '0.5', '-g', '0', '-m', '-n'], check=True)
     
     # HD-BET fast 
-    subprocess.run(['hd-bet', '-i', scan, '-o', output_mask, '-tta', '0', '-pp', '0', '-b', '0', '-mode', 'fast'], check=True)
-    
+    #subprocess.run(['hd-bet', '-i', scan, '-o', output_mask, '-tta', '0', '-pp', '0', '-b', '0', '-mode', 'fast'], check=True)
+    subprocess.run(['hd-bet', '-i', scan, '-o', output_mask, '--save_bet_mask'], check=True)
+
     # HD-BET accurate
     # subprocess.run(['hd-bet', '-i', scan, '-o', output_mask, '-tta', '1', '-pp', '1', '-b', '0', '-mode', 'accurate'], check=True)
     
-    mask_path = output_mask.replace(".nii.gz", "_mask.nii.gz")
+    mask_path = output_mask.replace(".nii.gz", "_bet.nii.gz")
 
     return mask_path
 
@@ -758,13 +760,13 @@ def print_msg_box(msg, indent=1, width=None, title=None):
 
 
 if __name__ == '__main__':
+    
     # Record the start time for runtime measurement
     start_time = time.time() 
     # Add the start time information to the headers list
     headers.append(f"start_time:\t{datetime.datetime.now()}")
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='')    
-    # Path for the output folder name
+    parser = argparse.ArgumentParser(description='')    # Path for the output folder name
     parser.add_argument('output_folder_name',
                         help = "the subfolder name on the '...\\UserInterface\\Data\\output_folder_name' directory.",
                         type=str)
@@ -820,15 +822,16 @@ if __name__ == '__main__':
     
     # Les résultats vont dans le dossier UserInterface (dans MRQy)
     print_folder_note = os.getcwd() + os.sep + 'UserInterface'
-    
     # Un dossier "Data" dans UserInterface va contenir les résultats de l'analyse des images
-    # fname_outdir = print_folder_note + os.sep + 'Data' + os.sep + args.output_folder_name
-    
-    # version pour avoir une liberté de choix dans le chemin de sortie des résultats
+    #  fname_outdir = print_folder_note + os.sep + 'Data' + os.sep + args.output_folder_name
+   
+    # modif benj
     fname_outdir = args.output_folder_name
-    
+   
     overwrite_flag = "w"        
     headers.append(f"outdir:\t{os.path.realpath(fname_outdir)}")
+    #benj : essayé de faire un truc plus simple pour l'outdir, à voir si ça marche ou pas
+    #headers.append("#outdir:\t~/")
     headers.append(f"scantype:\t{scan_type}")
     
     patients, names, dicom_spil, nondicom_spli, nondicom_names, mat_spli, mat_names = file_name(root)
@@ -940,6 +943,16 @@ if __name__ == '__main__':
     print("MRQy program took", format((time.time() - start_time)/60, '.2f'), \
           "minutes for {} images to run.".format(len(names)))
     
+    # copy UserInterface folder to the output directory
+    src_UserInserface = os.getcwd() + os.sep + 'UserInterface'
+    print(src_UserInserface)
+    print(print_folder_note)
+    #shutil.copytree(src_UserInserface, print_folder_note, dirs_exist_ok=True)
+    shutil.copytree(src_UserInserface, fname_outdir + os.sep + 'UserInterface', dirs_exist_ok=True)
+
+
+
+
     # Provide guidance for viewing the final results in the MRQy interface
     msg = "Please go to the '{}' directory and open up the 'index.html' file.\n".format(print_folder_note) + \
     "Click on 'View Results' and select '{}' file.\n".format(fname_outdir + os.sep + "results.tsv")   

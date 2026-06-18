@@ -46,12 +46,9 @@ function initialize_data_table (dataset) {
         `;
     
         if (!$cell.find('.visual-qc-dropdown').length) {
-            var currentValue = $cell.text().trim();
             $cell.html(dropdownHTML);
-            $cell.find('select').val(currentValue).focus();
-            //$cell.html(dropdownHTML);
-            //$cell.find('select').focus().val($cell.text().trim());
-            
+            $cell.find('select').focus().val($cell.text().trim());
+    
             $cell.find('select').on('change blur', function () {
                 var selectedValue = $(this).val();
                 $cell.html(selectedValue); // Update cell with the selected value
@@ -64,71 +61,11 @@ function initialize_data_table (dataset) {
 		data_sorting($(this).text(), (TABLE.order()[0][1] == 'desc')); // sort by columns
 		update_views(); // update any dependant views
 	});
-
-    // Keyboard navigation: ArrowUp / ArrowDown to move between rows
-    $(document).off("keydown.tableNav").on("keydown.tableNav", function (e) {
-        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-        if (!CURRENT_SELECTED) return;
-
-        e.preventDefault(); // prevent page scrolling
-
-        // Get all currently visible & filtered rows in display order
-        var rowIndexes = TABLE.rows({ order: 'current', search: 'applied' }).indexes().toArray();
-
-        // Find the index of the currently selected row among visible rows
-        var currentPos = -1;
-        for (var i = 0; i < rowIndexes.length; i++) {
-            var rowData = TABLE.row(rowIndexes[i]).data();
-            var caseName = $(TABLE.row(rowIndexes[i]).node()).find("td:first-child").text();
-            if (caseName === CURRENT_SELECTED) {
-                currentPos = i;
-                break;
-            }
-        }
-
-        if (currentPos === -1) return; // current selection not found
-
-        // Calculate next position
-        var nextPos;
-        if (e.key === "ArrowDown") {
-            nextPos = Math.min(currentPos + 1, rowIndexes.length - 1);
-        } else {
-            nextPos = Math.max(currentPos - 1, 0);
-        }
-
-        if (nextPos === currentPos) return; // already at the boundary
-
-        // Get the case name of the target row
-        var nextCaseName = $(TABLE.row(rowIndexes[nextPos]).node()).find("td:first-child").text();
-
-        // Trigger selection — same as a mouse click, synchronizes all views
-        enter_select_mode(nextCaseName, true);
-
-        // Scroll the DataTable body to make the selected row visible
-        var $nextRow = $(TABLE.row(rowIndexes[nextPos]).node());
-        var $scrollBody = $($table.closest(".dataTables_scrollBody"));
-        if ($scrollBody.length) {
-            var rowOffsetTop = $nextRow[0].offsetTop;
-            var scrollBodyHeight = $scrollBody.height();
-            var currentScrollTop = $scrollBody.scrollTop();
-            // Only scroll if the row is outside the visible area
-            if (rowOffsetTop < currentScrollTop || rowOffsetTop + $nextRow.outerHeight() > currentScrollTop + scrollBodyHeight) {
-                $scrollBody.stop(true).animate({ scrollTop: rowOffsetTop - scrollBodyHeight / 2 }, 80);
-            }
-        }
-    });
 }
  
  
 // Function to generate the table with headers and rows
 function generate_table(dataset, table) {
-    // Add a unique identifier to each line if not already done
-    dataset.forEach((row, index) => {
-        if (!row.id) {
-            row.id = `row-${index}`; // Creates a unique identifier
-        }
-    });
-
     // Step 1: Create the table header with conditional columns
     var thead_content = "<tr>";
     thead_content += "<th>Image</th>";
@@ -161,23 +98,14 @@ function generate_table(dataset, table) {
     // Step 2: Create the table body
     var tbody_content = "";
     for (var i = 0; i < dataset.length; i++) {
-        tbody_content += `<tr data-id="${dataset[i].id}">`; // Associate the ID to each line
+        tbody_content += "<tr>";
         
         // Get the value of the first column (assuming it contains the image name)
         var imageName = dataset[i][ORIGINAL_FEATURE_LIST[0]];
         
-        // Detect tag from image name: sort KNOWN_TAGS by length descending so the most
-        // specific (longest) match wins. E.g. "T2_FLAIR" is matched before "T2" or "FLAIR".
-        var sortedTags = KNOWN_TAGS.slice().sort(function(a, b) { return b.length - a.length; });
-        var newTag = 'N/A';
-        for (var t = 0; t < sortedTags.length; t++) {
-            // Match the tag as a whole word (bounded by separators or start/end of string)
-            var tagRegex = new RegExp('(^|[_\\-\\.\\s])' + sortedTags[t].replace(/[-_]/g, '[_\\-]') + '([_\\-\\.\\s]|$)', 'i');
-            if (tagRegex.test(imageName)) {
-                newTag = sortedTags[t];
-                break;
-            }
-        }
+        // Split the image name based on underscores to extract the new tag
+        var imageParts = imageName.split('_');
+        var newTag = imageParts.slice(4,5).join('_') || 'N/A'; // 4th part for New Tag, or 'N/A' if missing
         
         // Add the Image column
         tbody_content += "<td>" + imageName + "</td>"; // Image
@@ -378,29 +306,26 @@ function data_sorting (keyword, desc=false) {
 	CURRENT_CASE_LIST = CURRENT_MULTI_SELECTED.map(function (d) {return d["Image"];}); // Update the case list
 }
 
-// Trouver qqch pour que la colonne id ne soit pas imprimee dans le tableau exporte en tsv
 
 // Event listener to save changes made in the table
 $("#save-button").on("click", function() {
     TABLE.rows().every(function() {
-        var visibleRow = $(this.node()); // Ligne visible
-        var rowId = visibleRow.data("id"); // Récupérez l'ID unique
-        var originalRow = ORIGINAL_DATASET.find(row => row.id === rowId); // Trouvez la ligne correspondante
-
         var rowIndex = this.index();
         var rowData = this.data();
         
         // Get the current values in the visible table for Tag and QC_Tag
-        if (originalRow) {
-            // Mettez à jour les champs dans ORIGINAL_DATASET
-            originalRow.Tag = visibleRow.find("td:eq(1)").text().trim(); // Adaptez selon l'index de la colonne
-            originalRow.QC_Tag = visibleRow.find("td:eq(2)").text().trim();
-            originalRow.Visual_QC = visibleRow.find("td.visual-qc-cell").text().trim();
-        }
+        var tagValue = $(this.node()).find("td:eq(1)").text(); // Adjust index based on actual column position
+        var qcTagValue = $(this.node()).find("td:eq(2)").text(); // Adjust index based on actual column position
+        var visualQCValue = $(this.node()).find("td.visual-qc-cell").text().trim(); // Save Visual_QC value
+
+        // Update ORIGINAL_DATASET with visible values for Tag and QC_Tag
+        ORIGINAL_DATASET[rowIndex]["Tag"] = tagValue;
+        ORIGINAL_DATASET[rowIndex]["QC_Tag"] = qcTagValue;
+        ORIGINAL_DATASET[rowIndex]["Visual_QC"] = visualQCValue; // Update dataset with Visual_QC value
+
     });
 
-    console.log("ORIGINAL_DATASET updated with edited values.");
-    console.log(ORIGINAL_DATASET)
+    console.log("Updated Data:", ORIGINAL_DATASET);
     alert("Changes saved!");
 });
 
@@ -409,27 +334,28 @@ $("#save-button").on("click", function() {
 function tableToCSV() {
     var tsv = [];
 
-    // Forcer l'ordre des colonnes pour l'export
-    var headers = ["Image", "Tag", "QC_Tag", "Visual_QC"];
-    
-    // Ajouter les colonnes restantes dans l'ordre d'origine
-    ORIGINAL_FEATURE_LIST.forEach(header => {
-        if (!headers.includes(header)) {
-            headers.push(header);
-        }
-    });
+    // Prepare headers: all columns from ORIGINAL_FEATURE_LIST plus Tag and QC_Tag
+    var headers = [...ORIGINAL_FEATURE_LIST];
+    if (!headers.includes("Tag")) headers.push("Tag");
+    if (!headers.includes("QC_Tag")) headers.push("QC_Tag");
+    if (!headers.includes("Visual_QC")) headers.push("Visual_QC");
+    tsv.push(headers.join('\t'));  // Add headers to the TSV output
 
-    // Ajouter les en-têtes dans l'ordre défini
-    tsv.push(headers.join('\t'));
-
-    // Parcourir les lignes et organiser les données selon l'ordre des en-têtes
-    ORIGINAL_DATASET.forEach(row => {
-        var line = headers.map(header => {
-            var value = row[header];
-            // Gérer les valeurs manquantes ou nulles
-            return value === undefined || value === null ? '' : value;
+    // Loop through each row in ORIGINAL_DATASET to get data for all columns in headers
+    ORIGINAL_DATASET.forEach(function(rowData) {
+        var row = headers.map(function(columnName) {
+            // Fetch the value corresponding to the columnName or set a default if undefined
+            if (columnName === "Tag") {
+                return rowData["Tag"] || 'N/A';  // Default to 'N/A' if Tag is not defined
+            } else if (columnName === "QC_Tag") {
+                return rowData["QC_Tag"] || 'N/A';  // Default to 'N/A' if QC_Tag is not defined
+            } else if (columnName == "Visual_QC") {
+                return rowData["Visual_QC"] || 'OK';
+            } else {
+                return rowData[columnName] !== undefined ? rowData[columnName].toString().trim() : '';  // Retrieve value or empty if undefined
+            }
         });
-        tsv.push(line.join('\t'));
+        tsv.push(row.join('\t'));  // Join row values by tab and add to TSV
     });
 
     return FILE_HEADER + tsv.join('\r\n');  // Return complete TSV data as a string

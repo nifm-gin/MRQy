@@ -332,7 +332,7 @@ function initializeUmapView(dataset = ORIGINAL_DATASET, colorColumn = "MFR") {
 		.style("font-size", "14px");
 	
 	Object.keys(ORIGINAL_DATASET[0]).forEach(function(columnName) {
-		if (columnName !== "id" && columnName !== "Image" && columnName !== "Name of Images" && columnName !== "Tag" && columnName !== "QC_Tag" && columnName !== "Visual_QC") {
+		if (columnName !== "Image" && columnName !== "Name of Images" && columnName !== "Tag" && columnName !== "QC_Tag" && columnName !== "Visual_QC") {
 			metricSelect.append("option")
 				.attr("value", columnName)
 				.text(columnName)

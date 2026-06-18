@@ -40,13 +40,3 @@ var DEFAULT_VIS_TYPE = "parallel_coordinate";
 var DEFAULT_IMAGE_EXTENSIONS = [
     "_thumb.png"
 ];
-
-/****************** TAG DETECTION ****************/
-// Known medical imaging tags. The system picks the longest one that matches in the image name.
-// Add any tag specific to your dataset here
-var KNOWN_TAGS = [
-    // BIDS Standard tags
-	"T1w", "T2w", "FLAIR", "bold", "dwi", "perf",
-	// RadioAIDE-specific tags
-	"T1", "T1gd", "T2", "FLAIR"
-];

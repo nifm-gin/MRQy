@@ -22,9 +22,14 @@ function data_loading() {
     fileReader.onload = function () {
         console.log("[LOG] App initializing...");
         var file_text = fileReader.result;
-
-        var absdirRe = /#outdir:?\s*([^\s]*)\s*\n/;
-        var abs_outdir = absdirRe.exec(file_text)[1];
+        // var absdirRe = /#outdir:?\s*([^\s]*)\s*\n/;
+        // var abs_outdir = absdirRe.exec(file_text)[1];
+	const url = new URL(window.location.href);
+        let directory = url.pathname;
+        directory = directory.substring(0, directory.lastIndexOf('/'));
+        directory = directory.substring(0, directory.lastIndexOf('/') + 1);
+        console.log(url.origin + directory);
+        var abs_outdir = directory;
         //var imageRoot = abs_outdir + "/";
 	//console.log("imageRoot utilisé :", imageRoot);
 	window.imageRoot = abs_outdir + "/";
